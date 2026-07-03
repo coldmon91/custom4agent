@@ -1,0 +1,56 @@
+analysis:
+  scope: current_project_only
+  include_tests: true
+  include_examples: false
+  max_call_depth: 25
+  prefer_conservative_paths: true
+  collect_predicates: true
+  dead_code_requires_strong_evidence: true
+
+ranking:
+  explicit_entry_point: 1.0
+  direct_call: 0.9
+  framework_registration: 0.8
+  interface_dispatch: 0.6
+  reflection_or_string_dispatch: 0.3
+
+outputs:
+  include_call_paths: true
+  include_conditions: true
+  include_dead_code_assessment: true
+  include_unknowns: true
+
+languages:
+  python:
+    detect_framework_routes: true
+    detect_signals: true
+    detect_cli_commands: true
+  javascript:
+    detect_routes: true
+    detect_event_emitters: true
+    detect_cron_jobs: true
+  typescript:
+    detect_routes: true
+    detect_event_emitters: true
+    detect_cron_jobs: true
+  go:
+    detect_http_handlers: true
+    detect_goroutines: true
+    detect_build_tags: true
+  c:
+    detect_function_pointers: true
+    detect_macros: true
+  cpp:
+    detect_virtual_dispatch: true
+    detect_function_pointers: true
+    detect_macros: true
+  java:
+    detect_annotations: true
+    detect_spring_entry_points: true
+  kotlin:
+    detect_annotations: true
+    detect_spring_entry_points: true
+  rust:
+    detect_cfg_guards: true
+    detect_trait_dispatch: true
+    detect_tokio_tasks: true

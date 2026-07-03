@@ -1,0 +1,25 @@
+target_project_path: "/absolute/path/to/project"
+entrypoints:
+  - "src/main.py"
+  - "cmd/server/main.go"
+output_language: "ko"
+analysis_depth: "deep"
+parallel: true
+include_bit_level_protocol: true
+include_security_review: true
+include_testing_coverage: true
+include_build_deployment: true
+protocol_keywords:
+  - packet
+  - frame
+  - message
+  - opcode
+  - command
+  - payload
+  - header
+  - crc
+  - checksum
+  - serialize
+  - deserialize
+  - encode
+  - decode
