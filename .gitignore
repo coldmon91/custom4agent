@@ -1,0 +1,8 @@
+# Sensitive / personal data — never commit
+auth.json
+trust.json
+sessions/
+*.7z
+
+# OS
+.DS_Store
