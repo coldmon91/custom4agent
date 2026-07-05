@@ -1,6 +1,6 @@
 # custom4agent
 
-Pi agent 설정 파일 모음.
+Pi agent / 코딩 에이전트 설정 파일 모음.
 
 ## 구성
 
@@ -13,6 +13,12 @@ pi-agent/
     ├── model-thinking-selector.ts
     ├── thinking-colors.ts
     └── tool-mode-cycle.ts
+
+agent_settings/
+├── AGENTS.md             # 에이전트 동작 가이드라인 (페르소나/규칙/커뮤니케이션/프로그래밍 원칙)
+├── commands/             # 커맨드 스킬 (codex, cmux, debugger, daily-summary 등)
+└── skills/               # 언어별(cpp/rust/go/swift/flutter), 분석(code-path/architecture/log),
+                           # 리서치(web-research), 브라우저(playwright/aside-browser) 등 스킬 모음
 ```
 
 ## 참고
