@@ -55,6 +55,7 @@ the evidence is ambiguous, or the analysis spans several subsystems.
 - Always include `--skip-git-repo-check`.
 - Do not use `--dangerously-bypass-approvals-and-sandbox`.
 - Do not allow Codex to modify, create, or delete files.
+- Codex may become blocked during work, so periodic checks for blocking are necessary.
 - If Codex returns an error, report it verbatim.
 
 ## Prompt Construction

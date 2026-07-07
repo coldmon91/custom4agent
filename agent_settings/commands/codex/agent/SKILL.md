@@ -57,6 +57,7 @@ ambiguous architecture tradeoffs, or requires coordinating several subsystems.
 - Keep Codex edits inside the current workspace.
 - Do not pass `--add-dir` unless the user explicitly requests another writable directory.
 - Codex must not run destructive commands such as `rm`, `git reset`, or checkout-based reverts.
+- Codex may become blocked during work, so periodic checks for blocking are necessary.
 - If Codex returns an error, report it verbatim.
 
 ## Prompt Construction
