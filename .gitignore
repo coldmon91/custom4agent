@@ -10,3 +10,4 @@ agent_settings/skills/my-remote/
 
 # Python
 __pycache__/
+pi-agent/settings.json
