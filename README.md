@@ -6,7 +6,6 @@ Pi agent / 코딩 에이전트 설정 파일 모음.
 
 ```
 pi-agent/
-├── settings.json        # 테마, 기본 provider/model, thinking 설정
 ├── keybindings.json     # 키 바인딩
 └── extensions/          # 확장 스크립트 (TypeScript)
     ├── footer-model-under-cwd.ts
@@ -25,3 +24,5 @@ agent_settings/
 
 인증 정보(`auth.json`), 신뢰 목록(`trust.json`), 세션 데이터(`sessions/`) 등
 민감·개인 데이터는 `.gitignore` 로 제외되어 있습니다.
+Pi의 로컬 설정과 최근 모델 기록인 `pi-agent/settings.json`과
+`pi-agent/recent-models.json`도 저장소에서 추적하지 않습니다.
