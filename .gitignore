@@ -3,6 +3,10 @@ auth.json
 trust.json
 sessions/
 *.7z
+agent_settings/skills/my-remote/
 
 # OS
 .DS_Store
+
+# Python
+__pycache__/

@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "provider": "openai-codex",
+      "modelId": "gpt-5.5",
+      "lastUsedAt": "2026-07-09T08:45:53.470Z"
+    },
+    {
+      "provider": "openai-codex",
+      "modelId": "gpt-5.4-mini",
+      "lastUsedAt": "2026-07-09T08:38:37.720Z"
+    },
+    {
+      "provider": "deepseek",
+      "modelId": "deepseek-v4-flash",
+      "lastUsedAt": "2026-07-09T00:42:29.113Z"
+    },
+    {
+      "provider": "deepseek",
+      "modelId": "deepseek-v4-pro",
+      "lastUsedAt": "2026-07-09T00:35:24.397Z"
+    }
+  ]
+}

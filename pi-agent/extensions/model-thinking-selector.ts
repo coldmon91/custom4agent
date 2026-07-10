@@ -277,13 +277,19 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               return;
             }
             if (matchesKey(data, Key.left)) {
-              thinkingIndex = Math.max(0, thinkingIndex - 1);
-              refresh();
+              const selectedModel = visibleModels[modelIndex]?.model;
+              if (selectedModel?.reasoning) {
+                thinkingIndex = Math.max(0, thinkingIndex - 1);
+                refresh();
+              }
               return;
             }
             if (matchesKey(data, Key.right)) {
-              thinkingIndex = Math.min(THINKING_LEVELS.length - 1, thinkingIndex + 1);
-              refresh();
+              const selectedModel = visibleModels[modelIndex]?.model;
+              if (selectedModel?.reasoning) {
+                thinkingIndex = Math.min(THINKING_LEVELS.length - 1, thinkingIndex + 1);
+                refresh();
+              }
               return;
             }
             if (matchesKey(data, Key.backspace) || matchesKey(data, Key.delete)) {
@@ -299,7 +305,10 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               clampModelIndex();
               const selectedModel = getVisibleModels()[modelIndex];
               if (selectedModel) {
-                done({ model: selectedModel, thinking: THINKING_LEVELS[thinkingIndex] });
+                done({
+                  model: selectedModel,
+                  thinking: selectedModel.model.reasoning ? THINKING_LEVELS[thinkingIndex] : "off",
+                });
               }
               return;
             }
@@ -340,11 +349,6 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             const title = `Model selector${currentModelKey ? ` · current ${currentModelKey}` : ""}`;
             lines.push(theme.fg("accent", "─".repeat(renderWidth)));
             lines.push(...wrapTextWithAnsi(theme.fg("text", title), renderWidth));
-            lines.push(
-              effectiveThinking === requestedThinking
-                ? `${theme.fg("muted", "Effort: ")}${requestedEffortText}`
-                : `${theme.fg("muted", "Effort: ")}${requestedEffortText}${theme.fg("dim", " → ")}${effectiveEffortText}`,
-            );
             lines.push(theme.fg("muted", `Search: ${query || "(type to filter)"}`));
             lines.push("");
 
@@ -378,20 +382,27 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               const isCurrent = `${item.provider}/${item.modelId}` === currentModelKey;
               const prefix = selected ? theme.fg("accent", "> ") : "  ";
               const baseLabel = `${isCurrent ? "● " : "  "}${formatModelLabel(item.model)}`;
-              const wrapped = wrapTextWithAnsi(baseLabel, Math.max(1, renderWidth - visibleWidth(prefix)));
+              const effortSuffix = selected
+                ? item.model.reasoning
+                  ? effectiveThinking === requestedThinking
+                    ? `${theme.fg("dim", " · effort ")}${requestedEffortText}`
+                    : `${theme.fg("dim", " · effort ")}${requestedEffortText}${theme.fg("dim", " → ")}${effectiveEffortText}`
+                  : theme.fg("dim", " · effort unavailable")
+                : "";
+              const labelColor = selected ? "accent" : isCurrent ? "success" : "text";
+              const wrapped = wrapTextWithAnsi(
+                `${theme.fg(labelColor, baseLabel)}${effortSuffix}`,
+                Math.max(1, renderWidth - visibleWidth(prefix)),
+              );
 
-              for (let lineIndex = 0; lineIndex < wrapped.length; lineIndex++) {
-                const coloredLeft = theme.fg(
-                  selected ? "accent" : lineIndex === 0 && isCurrent ? "success" : "text",
-                  wrapped[lineIndex],
-                );
-                lines.push(`${prefix}${coloredLeft}`);
+              for (const line of wrapped) {
+                lines.push(`${prefix}${line}`);
               }
             }
 
             lines.push("");
             if (selectedModel && !selectedModel.reasoning) {
-              lines.push(theme.fg("warning", "* This model does not support reasoning; effort will be off."));
+              lines.push(theme.fg("warning", "* This model does not support reasoning; effort selection is disabled."));
             }
             lines.push(theme.fg("dim", "Type to search • Backspace delete • ↑↓ model • ←→ effort • Enter apply • Esc clear/cancel"));
             lines.push(theme.fg("accent", "─".repeat(renderWidth)));

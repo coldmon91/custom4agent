@@ -8,8 +8,7 @@ import subprocess
 import sys
 from math import inf
 
-EXCLUDED = re.compile(r"mini|oss|auto|spark", re.I)
-MINI = re.compile(r"mini", re.I)
+MODEL_VARIANTS = ("sol", "terra", "luna")
 
 
 def die(message: str) -> None:
@@ -52,6 +51,10 @@ def pick(models, keep) -> str:
     return next(iter(slugs(models, keep)), "")
 
 
+def has_variant(name: str, variant: str) -> bool:
+    return re.search(rf"-{re.escape(variant)}$", name, re.I) is not None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Query Codex model slugs.")
     parser.add_argument("--all", action="store_true", help="list every usable model slug")
@@ -65,7 +68,11 @@ def main() -> None:
         return
 
     candidates = [model for model in usable if model.get("upgrade") is None]
-    print(f"{pick(candidates, lambda name: not EXCLUDED.search(name))}\t{pick(candidates, MINI.search)}")
+    selected = [
+        pick(candidates, lambda name, variant=variant: has_variant(name, variant))
+        for variant in MODEL_VARIANTS
+    ]
+    print("\t".join(selected))
 
 
 if __name__ == "__main__":

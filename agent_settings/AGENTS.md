@@ -48,6 +48,17 @@ When you write the summary at the end, drop the working shorthand. Write complet
 - TODO 문서의 작업은 작업이 완료된 후 완료처리 한다. ex `- [ ]` -> `- [x]`
 - when writing comments, just explain the core logic of the code, no difference explanation, no change explanation.
 
+### Versioning
+
+- {Major.Minor.Patch.Fix}
+- 표기는 Major.Minor.Patch.Hotfix 형식으로 표기한다. (예: 4.0.0+0 == 4.0.0.0)
+- 회사 정책으로 네자리 버전 표기법을 사용한다. 
+- Major: 대규모 리팩토링, 하위 호환성 없는 API 변경
+- Minor: 기능 추가 / 삭제
+- Patch: 하위호환 유지되는 버그 수정
+- Fix: 개발 관련 변경/개선, 성능 개선, 안정화, 문서 변경, 기타
+- 
+
 ### C++
 
 - Always use braces for if statements

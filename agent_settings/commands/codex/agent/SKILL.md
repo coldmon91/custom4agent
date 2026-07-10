@@ -16,11 +16,12 @@ against this `SKILL.md`'s absolute location and run it with the absolute path:
 python3 "<skill dir>/../get_models.py"
 ```
 
-Output is one line: `<LATEST_MODEL>\t<LATEST_MINI_MODEL>`. Capture the two tab-separated slugs as
+Output is one line: `<LATEST_SOL_MODEL>\t<LATEST_TERRA_MODEL>\t<LATEST_LUNA_MODEL>`. Capture the
+three tab-separated slugs as
 **plain strings** and substitute the literal text into every `codex` command (env vars do not
 survive across Bash calls).
 
-If either field is empty, abort and report it. Fallback slug reference:
+If any field is empty, abort and report it. Fallback slug reference:
 `https://developers.openai.com/codex/models`. Do not read model env vars or hardcode slugs.
 
 ## Arguments
@@ -36,10 +37,10 @@ User-specified values always take precedence.
 
 Pick dynamically based on task complexity. When uncertain, step up one tier.
 
-- Tier 1: `<LATEST_MINI_MODEL>` / `medium`
-- Tier 2: `<LATEST_MODEL>` / `high`
-- Tier 3: `<LATEST_MODEL>` / `high`
-- Tier 4: `<LATEST_MODEL>` / `xhigh`
+- Tier 1: `<LATEST_LUNA_MODEL>` / `medium`
+- Tier 2: `<LATEST_TERRA_MODEL>` / `high`
+- Tier 3: `<LATEST_SOL_MODEL>` / `high`
+- Tier 4: `<LATEST_SOL_MODEL>` / `xhigh`
 
 Use Tier 1 for small, localized edits.
 Use Tier 2 for ordinary bug fixes, focused refactors, and test additions.
@@ -95,7 +96,7 @@ Always include `[제약]`.
 
 ## What To Do
 
-1. Resolve the two model slugs with the `get_models.py` script above and remember them as plain strings.
+1. Resolve the three model slugs with the `get_models.py` script above and remember them as plain strings.
 2. Parse `$ARGUMENTS` for `-m`, `-c model_reasoning_effort=`, and the user request.
 3. Classify the tier and fill only unspecified options.
 4. Announce the resolved choice in one line, including the literal model slug.
