@@ -125,6 +125,7 @@ Experiment run: <what you did>
 Observed result: <what happened>
 Matches prediction: <yes / no / partial — which branch>
 Hypothesis status: <supported / refuted / inconclusive>
+Confidence level: <1-5, see "Expressing confidence, not certainty" below>
 
 [If supported, continue:]
 Fix applied: <description, with file:line references>
@@ -140,6 +141,22 @@ Regression check: <what you ran, what passed>
 
 ---
 
+## Expressing confidence, not certainty
+
+A "supported" hypothesis is a belief updated by evidence, not a proven fact. Never state the root cause with absolute language — avoid "confirmed", "definitely", "clearly", "the cause is X" as a bare assertion. State the conclusion as a probability and attach an explicit confidence level, in the user's language.
+
+### Confidence level (1-5)
+
+Rate confidence from the number and certainty of evidence gathered in Verify — not from how the hypothesis "feels":
+
+1. **Very low** — 0-1 pieces of weak/indirect evidence; hypothesis untested or the experiment only partially matched the predicted-if-correct outcome. Express as roughly 20-40% likely.
+2. **Low** — 1-2 circumstantial pieces of evidence; experiment inconclusive; alternative hypotheses not ruled out. Roughly 40-55% likely.
+3. **Moderate** — 2+ pieces of direct evidence; experiment matched the predicted-if-correct outcome, but no regression check yet or some alternatives remain unruled-out. Roughly 55-75% likely.
+4. **High** — Multiple independent pieces of evidence agree (e.g. code path + log/trace + experiment result); predicted-if-wrong outcome did not occur; fix verified against the repro. Roughly 75-90% likely.
+5. **Very high** — All of High, plus regression check passed and (for intermittent bugs) the repro was re-run enough times to be statistically convincing; attempts to disprove the hypothesis failed. Roughly 90%+ likely — never state 100%; residual uncertainty always remains.
+
+State both the level and the qualitative phrase together, e.g. "Level 4 (high confidence, ~80%): X is likely the root cause" — never "X is the root cause" as a flat fact.
+
 ## When to loop back
 
 - **Repro fails to reproduce the bug the user reported** → return to the user with specifics. Do not invent a repro.
@@ -152,19 +169,19 @@ Regression check: <what you ran, what passed>
 At the end of an investigation, summarize using this structure:
 
 ```
-## Root Cause: <one-line summary>
+## Root Cause: <one-line summary, phrased as a probability, not a fact — e.g. "Likely caused by X (level 4/5, ~80%)">
 
 ### Repro
 <the repro artifact>
 
 ### Root cause
-<the verified hypothesis, stated as a causal chain>
+<the verified hypothesis, stated as a causal chain, prefixed with its confidence level and rough probability — never asserted as bare fact>
 
 ### Fix
 <what was changed and why it breaks the causal chain — include file:line references>
 
 ### Verification
-<how you confirmed the fix works, including regression checks>
+<how you confirmed the fix works, including regression checks and the final confidence level>
 ```
 
 If the investigation is incomplete (bug didn't reproduce, hypothesis not yet verified, access blocked), be explicit about which stage you got to and what's blocking the next one. Do not present an incomplete investigation as a finished one.
