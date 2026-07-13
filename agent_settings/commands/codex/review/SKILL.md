@@ -56,6 +56,10 @@ the evidence is ambiguous, or the analysis spans several subsystems.
 - Always include `--skip-git-repo-check`.
 - Do not use `--dangerously-bypass-approvals-and-sandbox`.
 - Do not allow Codex to modify, create, or delete files.
+- Never interpolate the assembled prompt into a shell command, argument, variable, heredoc, or
+  `printf`/`echo` pipeline. Pass it only through the execution tool's raw stdin channel.
+- If the execution tool cannot pass raw stdin without shell interpolation, abort and report the
+  unsupported execution environment.
 - Codex may become blocked during work, so periodic checks for blocking are necessary.
 - If Codex returns an error, report it verbatim.
 
@@ -95,17 +99,15 @@ Always include `[제약]`.
 2. Parse `$ARGUMENTS` for `-m`, `-c model_reasoning_effort=`, and the user request.
 3. Classify the tier and fill only unspecified options.
 4. Announce the resolved choice in one line, including the literal model slug.
-5. Build the command, substituting the literal resolved slug for `<model>` (no `$VAR` references):
+5. Build the command, substituting the literal resolved slug for `<model>` (no `$VAR` references).
+   Use `-` so that Codex reads the entire assembled prompt from stdin:
    ```bash
    codex -a never e --skip-git-repo-check -s read-only \
-     -m <model> -c model_reasoning_effort=<level> "<prompt>"
+     -m <model> -c model_reasoning_effort=<level> -
    ```
-6. For a long prompt, pipe via stdin with the same resolved model and level:
-   ```bash
-   printf '%s\n' "<prompt>" | codex -a never e --skip-git-repo-check -s read-only \
-     -m <model> -c model_reasoning_effort=<level> \
-     "아래 stdin 입력을 기반으로 작업을 수행해라"
-   ```
+6. Start the command and send the complete assembled prompt through the execution tool's raw stdin
+   input facility, then close stdin. Do not construct a shell pipeline or place any prompt text in
+   the command string.
 7. Execute with Bash and set timeout to 300000 ms.
 8. Validate Codex output against the real code.
 9. Deliver Codex output, validation, and brief commentary.
