@@ -1,14 +1,20 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { Api, Model } from "@earendil-works/pi-ai/compat";
+import {
+  clampThinkingLevel,
+  getSupportedThinkingLevels,
+  type Api,
+  type Model,
+  type ModelThinkingLevel,
+} from "@earendil-works/pi-ai/compat";
 import { Key, matchesKey, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { thinkingColor } from "./thinking-colors";
 
-const THINKING_LEVELS = ["off", "low", "medium", "high", "xhigh"] as const;
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const MAX_VISIBLE_MODELS = 10;
 const MAX_RECENT_MODELS = 5;
-type ThinkingLevel = (typeof THINKING_LEVELS)[number];
+type ThinkingLevel = ModelThinkingLevel;
 
 type RecentModelStore = {
   version: 1;
@@ -38,7 +44,7 @@ function formatModelLabel(model: Model<Api>): string {
 }
 
 function effectiveThinkingFor(model: Model<Api>, requested: ThinkingLevel): ThinkingLevel {
-  return model.reasoning ? requested : "off";
+  return clampThinkingLevel(model, requested);
 }
 
 function getRecentModelsFilePath(): string {
@@ -172,7 +178,6 @@ async function getSelectableModels(ctx: ExtensionContext): Promise<ModelItem[]> 
 }
 
 function normalizeThinkingLevel(level: string): ThinkingLevel {
-  if (level === "minimal") return "low";
   return THINKING_LEVELS.includes(level as ThinkingLevel) ? (level as ThinkingLevel) : "off";
 }
 
@@ -182,17 +187,21 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
   });
 
   pi.registerShortcut("ctrl+shift+t", {
-    description: "Cycle thinking level (without minimal)",
+    description: "Cycle supported thinking level",
     handler: async (ctx) => {
       const rawCurrent = pi.getThinkingLevel();
       const current = normalizeThinkingLevel(rawCurrent);
-      const requested =
-        rawCurrent === "minimal"
-          ? "low"
-          : THINKING_LEVELS[(THINKING_LEVELS.indexOf(current) + 1) % THINKING_LEVELS.length];
-      const effective = ctx.model ? effectiveThinkingFor(ctx.model, requested) : requested;
+      const supportedLevels = ctx.model ? getSupportedThinkingLevels(ctx.model) : [...THINKING_LEVELS];
+
+      if (supportedLevels.length === 0) {
+        ctx.ui.notify("This model does not expose a thinking level", "warning");
+        return;
+      }
+
+      const currentIndex = supportedLevels.indexOf(current);
+      const requested = supportedLevels[(currentIndex + 1) % supportedLevels.length];
       pi.setThinkingLevel(requested);
-      ctx.ui.notify(`Effort ${rawCurrent} → ${effective}`, "info");
+      ctx.ui.notify(`Effort ${rawCurrent} → ${pi.getThinkingLevel()}`, "info");
     },
   });
 
@@ -276,19 +285,26 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               refresh();
               return;
             }
-            if (matchesKey(data, Key.left)) {
+            if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) {
               const selectedModel = visibleModels[modelIndex]?.model;
               if (selectedModel?.reasoning) {
-                thinkingIndex = Math.max(0, thinkingIndex - 1);
-                refresh();
-              }
-              return;
-            }
-            if (matchesKey(data, Key.right)) {
-              const selectedModel = visibleModels[modelIndex]?.model;
-              if (selectedModel?.reasoning) {
-                thinkingIndex = Math.min(THINKING_LEVELS.length - 1, thinkingIndex + 1);
-                refresh();
+                const supportedLevels = getSupportedThinkingLevels(selectedModel);
+                if (supportedLevels.length === 0) return;
+
+                const requested = THINKING_LEVELS[thinkingIndex];
+                const effective = effectiveThinkingFor(selectedModel, requested);
+                const currentIndex = supportedLevels.indexOf(effective);
+                const direction = matchesKey(data, Key.left) ? -1 : 1;
+                const nextIndex = Math.min(
+                  supportedLevels.length - 1,
+                  Math.max(0, currentIndex + direction),
+                );
+                const nextLevel = supportedLevels[nextIndex];
+                const globalIndex = THINKING_LEVELS.indexOf(nextLevel);
+                if (globalIndex >= 0 && globalIndex !== thinkingIndex) {
+                  thinkingIndex = globalIndex;
+                  refresh();
+                }
               }
               return;
             }
@@ -307,7 +323,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               if (selectedModel) {
                 done({
                   model: selectedModel,
-                  thinking: selectedModel.model.reasoning ? THINKING_LEVELS[thinkingIndex] : "off",
+                  thinking: effectiveThinkingFor(selectedModel.model, THINKING_LEVELS[thinkingIndex]),
                 });
               }
               return;

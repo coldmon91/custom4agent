@@ -1,9 +1,18 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-export function thinkingColor(level: string): "thinkingOff" | "thinkingLow" | "thinkingMedium" | "thinkingHigh" | "thinkingXhigh" {
+type ThinkingColor =
+  | "thinkingOff"
+  | "thinkingMinimal"
+  | "thinkingLow"
+  | "thinkingMedium"
+  | "thinkingHigh"
+  | "thinkingXhigh"
+  | "thinkingMax";
+
+export function thinkingColor(level: string): ThinkingColor {
   switch (level) {
     case "minimal":
-      return "thinkingOff";
+      return "thinkingMinimal";
     case "low":
       return "thinkingLow";
     case "medium":
@@ -12,6 +21,8 @@ export function thinkingColor(level: string): "thinkingOff" | "thinkingLow" | "t
       return "thinkingHigh";
     case "xhigh":
       return "thinkingXhigh";
+    case "max":
+      return "thinkingMax";
     default:
       return "thinkingOff";
   }
