@@ -1,5 +1,5 @@
 ---
-name: log-analyzer
+name: analysis-log
 description: "Comprehensive log file analysis and troubleshooting. Use when the user asks to analyze, debug, or explain log files. Identifies errors, explains current state, performs root cause analysis, and correlates events across multiple log files with precise timestamp tracking (millisecond precision)."
 ---
 

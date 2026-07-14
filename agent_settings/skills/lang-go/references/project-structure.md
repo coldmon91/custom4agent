@@ -172,95 +172,14 @@ go mod tidy
 
 ## Internal Packages
 
-```go
-// internal/ packages can only be imported by code in the parent tree
-
-myproject/
-├── internal/
-│   ├── auth/           # Can only be imported by myproject
-│   │   └── jwt.go
-│   └── database/
-│       └── postgres.go
-└── pkg/
-    └── models/         # Can be imported by anyone
-        └── user.go
-
-// This works (same project):
-import "github.com/user/myproject/internal/auth"
-
-// This fails (different project):
-import "github.com/other/project/internal/auth" // Error!
-
-// Internal subdirectories
-myproject/
-└── api/
-    └── internal/       # Can only be imported by code in api/
-        └── helpers.go
-```
-
-## Package Organization
-
-```go
-// user/user.go - Domain package
-package user
-
-import (
-    "context"
-    "time"
-)
-
-// User represents a user entity
-type User struct {
-    ID        string
-    Email     string
-    CreatedAt time.Time
-}
-
-// Repository defines data access interface
-type Repository interface {
-    Create(ctx context.Context, user *User) error
-    GetByID(ctx context.Context, id string) (*User, error)
-    Update(ctx context.Context, user *User) error
-    Delete(ctx context.Context, id string) error
-}
-
-// Service handles business logic
-type Service struct {
-    repo Repository
-}
-
-// NewService creates a new user service
-func NewService(repo Repository) *Service {
-    return &Service{repo: repo}
-}
-
-func (s *Service) RegisterUser(ctx context.Context, email string) (*User, error) {
-    user := &User{
-        ID:        generateID(),
-        Email:     email,
-        CreatedAt: time.Now(),
-    }
-    return user, s.repo.Create(ctx, user)
-}
-```
+- `internal/` scoping is compiler-enforced: `github.com/user/myproject/internal/auth` is importable only by code rooted at `myproject/`; any other module importing it is a build error. Nest deeper to scope tighter — `api/internal/helpers` is importable only within `api/`.
+- Domain package idiom: one package (`user`) owns its entity (`type User`), its `Repository` interface, and its `Service`. Constructor `NewService(repo Repository) *Service` returns the concrete type; methods take `ctx context.Context` first. Don't split the domain across `models`/`services`/`controllers`.
 
 ## Multi-Module Repository (Monorepo)
 
-```
-monorepo/
-├── go.work              # Workspace file
-├── services/
-│   ├── api/
-│   │   ├── go.mod
-│   │   └── main.go
-│   └── worker/
-│       ├── go.mod
-│       └── main.go
-└── shared/
-    └── models/
-        ├── go.mod
-        └── user.go
+Sibling modules each get a `go.mod`; a root `go.work` binds them for local dev (exact syntax — keep):
 
+```
 // go.work
 go 1.21
 
@@ -269,271 +188,101 @@ use (
     ./services/worker
     ./shared/models
 )
-
-// Commands:
-// go work init ./services/api ./services/worker
-// go work use ./shared/models
-// go work sync
 ```
+
+```bash
+go work init ./services/api ./services/worker   # create, listing modules
+go work use ./shared/models                      # add another module
+go work sync                                      # sync deps across the workspace
+```
+
+Do not commit `go.work` in a published library — it must not leak into consumers' builds.
 
 ## Build Tags and Constraints
 
+Constraint syntax (keep literal — the exact strings are the information):
+
 ```go
-// +build integration
-// integration_test.go
-
-package myapp
-
-import "testing"
-
-func TestIntegration(t *testing.T) {
-    // Integration test code
-}
-
-// Build: go test -tags=integration
-
-// File-level build constraints
-//go:build linux && amd64
-
-package myapp
-
-// Multiple constraints
-//go:build linux || darwin
-//go:build amd64
-
-// Negation
-//go:build !windows
-
-// Common tags:
-// linux, darwin, windows, freebsd
-// amd64, arm64, 386, arm
-// cgo, !cgo
+//go:build integration              // custom tag; run via: go test -tags=integration
+//go:build linux && amd64           // AND
+//go:build linux || darwin          // OR (a second //go:build line on the file ANDs with the first)
+//go:build !windows                 // negation
 ```
+
+- `//go:build` must sit above the `package` line with a blank line after it. The legacy `// +build` form is deprecated (Go 1.17+); `gofmt` keeps both in sync if present.
+- Common tags: OS `linux darwin windows freebsd`; arch `amd64 arm64 386 arm`; `cgo` / `!cgo`.
 
 ## Makefile Example
 
+Load-bearing recipes (the flags are the information — keep literal):
+
 ```makefile
-# Makefile
-.PHONY: build test lint clean run
-
-# Variables
-BINARY_NAME=myapp
-BUILD_DIR=bin
-GO=go
-GOFLAGS=-v
-
-# Build the application
-build:
-	$(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/server
-
-# Run tests
-test:
-	$(GO) test -v -race -coverprofile=coverage.out ./...
-
-# Run tests with coverage report
-test-coverage: test
-	$(GO) tool cover -html=coverage.out
-
-# Run linters
-lint:
-	golangci-lint run ./...
-
-# Format code
-fmt:
-	$(GO) fmt ./...
-	goimports -w .
-
-# Run the application
-run:
-	$(GO) run ./cmd/server
-
-# Clean build artifacts
-clean:
-	rm -rf $(BUILD_DIR)
-	rm -f coverage.out
-
-# Install dependencies
-deps:
-	$(GO) mod download
-	$(GO) mod tidy
-
-# Build for multiple platforms
-build-all:
-	GOOS=linux GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 ./cmd/server
-	GOOS=darwin GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 ./cmd/server
-	GOOS=windows GOARCH=amd64 $(GO) build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe ./cmd/server
-
-# Run with race detector
-run-race:
-	$(GO) run -race ./cmd/server
-
-# Generate code
-generate:
-	$(GO) generate ./...
-
-# Docker build
-docker-build:
-	docker build -t $(BINARY_NAME):latest .
-
-# Help
-help:
-	@echo "Available targets:"
-	@echo "  build         - Build the application"
-	@echo "  test          - Run tests"
-	@echo "  test-coverage - Run tests with coverage report"
-	@echo "  lint          - Run linters"
-	@echo "  fmt           - Format code"
-	@echo "  run           - Run the application"
-	@echo "  clean         - Clean build artifacts"
-	@echo "  deps          - Install dependencies"
+build:        $(GO) build -v -o bin/$(BINARY) ./cmd/server
+test:         $(GO) test -v -race -coverprofile=coverage.out ./...
+test-coverage: test; $(GO) tool cover -html=coverage.out
+lint:         golangci-lint run ./...
+fmt:          $(GO) fmt ./... && goimports -w .
+generate:     $(GO) generate ./...
+# cross-compile: set GOOS/GOARCH per target
+build-all:    GOOS=linux GOARCH=amd64 $(GO) build -o bin/$(BINARY)-linux-amd64 ./cmd/server
+              GOOS=windows GOARCH=amd64 $(GO) build -o bin/$(BINARY)-windows-amd64.exe ./cmd/server
 ```
 
 ## Dockerfile Multi-Stage Build
 
+Key flags (the `CGO_ENABLED=0` static-build recipe is the information — keep literal):
+
 ```dockerfile
-# Build stage
 FROM golang:1.21-alpine AS builder
-
 WORKDIR /app
-
-# Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
-
-# Copy source code
+RUN go mod download                 # cache deps layer before copying source
 COPY . .
-
-# Build binary
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
 
-# Final stage
 FROM alpine:latest
-
-RUN apk --no-cache add ca-certificates
-
-WORKDIR /root/
-
-# Copy binary from builder
+RUN apk --no-cache add ca-certificates   # needed for outbound TLS from a scratch/alpine base
 COPY --from=builder /app/server .
-
-# Copy config files if needed
-COPY --from=builder /app/configs ./configs
-
 EXPOSE 8080
-
 CMD ["./server"]
 ```
 
+- `CGO_ENABLED=0` produces a static binary that runs on `scratch`/`alpine` without libc. Keep it unless you link C.
+
 ## Version Information
 
-```go
-// version/version.go
-package version
+Inject build metadata via `-ldflags -X` into package-level string vars (exact invocation — keep):
 
-import "runtime"
-
-var (
-    // Set via ldflags during build
-    Version   = "dev"
-    GitCommit = "none"
-    BuildTime = "unknown"
-)
-
-// Info returns version information
-func Info() map[string]string {
-    return map[string]string{
-        "version":    Version,
-        "git_commit": GitCommit,
-        "build_time": BuildTime,
-        "go_version": runtime.Version(),
-        "os":         runtime.GOOS,
-        "arch":       runtime.GOARCH,
-    }
-}
-
-// Build with version info:
-// go build -ldflags "-X github.com/user/project/version.Version=1.0.0 \
-//   -X github.com/user/project/version.GitCommit=$(git rev-parse HEAD) \
-//   -X github.com/user/project/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```bash
+go build -ldflags "-X github.com/user/project/version.Version=1.0.0 \
+  -X github.com/user/project/version.GitCommit=$(git rev-parse HEAD) \
+  -X github.com/user/project/version.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ```
+
+- `-X pkg.Var=value` only overrides *string* vars that already have an assignable default; it silently no-ops on non-string or const. Read runtime metadata (`runtime.Version()`, `GOOS`, `GOARCH`) directly.
 
 ## Go Generate
 
-```go
-// models/user.go
-//go:generate mockgen -source=user.go -destination=../mocks/user_mock.go -package=mocks
-
-package models
-
-type UserRepository interface {
-    GetUser(id string) (*User, error)
-    SaveUser(user *User) error
-}
-
-// tools.go - Track tool dependencies
-//go:build tools
-
-package tools
-
-import (
-    _ "github.com/golang/mock/mockgen"
-    _ "golang.org/x/tools/cmd/stringer"
-)
-
-// Install tools:
-// go install github.com/golang/mock/mockgen@latest
-
-// Run generate:
-// go generate ./...
-```
+- `//go:generate <cmd>` — a directive comment (no space after `//`), run by `go generate ./...`. It is NOT run by `go build`; you invoke it explicitly. Example: `//go:generate mockgen -source=user.go -destination=../mocks/user_mock.go -package=mocks`.
+- Tool-dependency pinning: a `tools.go` file gated by `//go:build tools` with blank imports (`_ "..."`) keeps codegen tools in `go.mod` without shipping them in the build.
 
 ## Configuration Management
 
+Env-driven config via struct tags (the `envconfig`/`default`/`required` tag syntax is the information — keep literal):
+
 ```go
-// config/config.go
-package config
-
-import (
-    "os"
-    "time"
-
-    "github.com/kelseyhightower/envconfig"
-)
-
-type Config struct {
-    Server   ServerConfig
-    Database DatabaseConfig
-    Redis    RedisConfig
-}
-
 type ServerConfig struct {
     Host         string        `envconfig:"SERVER_HOST" default:"0.0.0.0"`
     Port         int           `envconfig:"SERVER_PORT" default:"8080"`
     ReadTimeout  time.Duration `envconfig:"SERVER_READ_TIMEOUT" default:"10s"`
-    WriteTimeout time.Duration `envconfig:"SERVER_WRITE_TIMEOUT" default:"10s"`
 }
-
 type DatabaseConfig struct {
     URL          string `envconfig:"DATABASE_URL" required:"true"`
     MaxOpenConns int    `envconfig:"DB_MAX_OPEN_CONNS" default:"25"`
-    MaxIdleConns int    `envconfig:"DB_MAX_IDLE_CONNS" default:"5"`
-}
-
-type RedisConfig struct {
-    Addr     string `envconfig:"REDIS_ADDR" default:"localhost:6379"`
-    Password string `envconfig:"REDIS_PASSWORD"`
-    DB       int    `envconfig:"REDIS_DB" default:"0"`
-}
-
-// Load loads configuration from environment
-func Load() (*Config, error) {
-    var cfg Config
-    if err := envconfig.Process("", &cfg); err != nil {
-        return nil, err
-    }
-    return &cfg, nil
 }
 ```
+
+- `envconfig.Process("", &cfg)` populates from env; `required:"true"` errors on missing, `default:"..."` fills absent. `time.Duration` fields parse Go duration strings (`"10s"`).
 
 ## Common Mistakes
 

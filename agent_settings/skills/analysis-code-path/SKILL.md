@@ -1,5 +1,5 @@
 ---
-name: code-path-analyzer
+name: analysis-code-path
 description: >
   Analyze when a target line, function, method, or class can execute inside the current project,
   and detect unused functions, methods, types, variables, or structs across the codebase.

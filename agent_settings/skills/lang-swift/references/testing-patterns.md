@@ -1,399 +1,61 @@
 # Testing Patterns
 
-## XCTest Basics
-
-```swift
-import XCTest
-@testable import MyApp
-
-final class UserTests: XCTestCase {
-    var sut: UserManager!
-
-    override func setUp() {
-        super.setUp()
-        sut = UserManager()
-    }
-
-    override func tearDown() {
-        sut = nil
-        super.tearDown()
-    }
-
-    func testUserCreation() {
-        // Given
-        let name = "John Doe"
-        let email = "john@example.com"
-
-        // When
-        let user = sut.createUser(name: name, email: email)
-
-        // Then
-        XCTAssertEqual(user.name, name)
-        XCTAssertEqual(user.email, email)
-        XCTAssertNotNil(user.id)
-    }
-
-    func testValidation() throws {
-        // Unwrapping optionals in tests
-        let user = try XCTUnwrap(sut.findUser(id: 123))
-        XCTAssertEqual(user.name, "Test User")
-    }
-}
-```
-
-## Async Testing
-
-```swift
-final class AsyncTests: XCTestCase {
-    func testAsyncFunction() async throws {
-        // Test async/await code directly
-        let result = try await fetchData()
-        XCTAssertEqual(result.count, 10)
-    }
-
-    func testAsyncSequence() async throws {
-        var results: [Int] = []
-
-        for try await value in numberStream() {
-            results.append(value)
-            if results.count >= 5 {
-                break
-            }
-        }
-
-        XCTAssertEqual(results.count, 5)
-    }
-
-    func testWithTimeout() async throws {
-        // Test with timeout
-        try await withTimeout(seconds: 5) {
-            try await longRunningOperation()
-        }
-    }
-
-    func testConcurrentOperations() async throws {
-        async let result1 = fetchData(id: 1)
-        async let result2 = fetchData(id: 2)
-
-        let (data1, data2) = try await (result1, result2)
-
-        XCTAssertNotNil(data1)
-        XCTAssertNotNil(data2)
-    }
-}
-
-// Helper for timeout
-func withTimeout<T>(
-    seconds: TimeInterval,
-    operation: @escaping () async throws -> T
-) async throws -> T {
-    try await withThrowingTaskGroup(of: T.self) { group in
-        group.addTask {
-            try await operation()
-        }
-
-        group.addTask {
-            try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            throw TimeoutError()
-        }
-
-        let result = try await group.next()!
-        group.cancelAll()
-        return result
-    }
-}
-```
-
-## Mocking
-
-```swift
-// Protocol for dependency injection
-protocol DataService {
-    func fetch(id: Int) async throws -> Data
-    func save(_ data: Data) async throws
-}
-
-// Production implementation
-class APIDataService: DataService {
-    func fetch(id: Int) async throws -> Data {
-        // Real API call
-    }
-
-    func save(_ data: Data) async throws {
-        // Real save operation
-    }
-}
-
-// Mock for testing
-class MockDataService: DataService {
-    var fetchCalled = false
-    var fetchID: Int?
-    var fetchResult: Data?
-    var fetchError: Error?
-
-    var saveCalled = false
-    var savedData: Data?
-    var saveError: Error?
-
-    func fetch(id: Int) async throws -> Data {
-        fetchCalled = true
-        fetchID = id
-
-        if let error = fetchError {
-            throw error
-        }
-
-        return fetchResult ?? Data()
-    }
-
-    func save(_ data: Data) async throws {
-        saveCalled = true
-        savedData = data
-
-        if let error = saveError {
-            throw error
-        }
-    }
-}
-
-// Using mock in tests
-final class DataManagerTests: XCTestCase {
-    func testDataFetch() async throws {
-        // Given
-        let mockService = MockDataService()
-        mockService.fetchResult = "test data".data(using: .utf8)
-        let manager = DataManager(service: mockService)
-
-        // When
-        let result = try await manager.loadData(id: 123)
-
-        // Then
-        XCTAssertTrue(mockService.fetchCalled)
-        XCTAssertEqual(mockService.fetchID, 123)
-        XCTAssertNotNil(result)
-    }
-}
-```
-
-## Test Doubles
-
-```swift
-// Spy - records interactions
-class SpyDelegate: UserManagerDelegate {
-    private(set) var didUpdateUserCalled = false
-    private(set) var updatedUser: User?
-    private(set) var callCount = 0
-
-    func didUpdateUser(_ user: User) {
-        didUpdateUserCalled = true
-        updatedUser = user
-        callCount += 1
-    }
-}
-
-// Stub - provides predetermined responses
-class StubNetworkService: NetworkService {
-    var stubbedResponse: Result<Data, Error> = .success(Data())
-
-    func fetch(url: URL) async throws -> Data {
-        try stubbedResponse.get()
-    }
-}
-
-// Fake - working implementation with shortcuts
-class FakeDatabase: Database {
-    private var storage: [String: Data] = [:]
-
-    func save(key: String, value: Data) {
-        storage[key] = value
-    }
-
-    func load(key: String) -> Data? {
-        storage[key]
-    }
-
-    func clear() {
-        storage.removeAll()
-    }
-}
-```
-
-## Performance Testing
-
-```swift
-final class PerformanceTests: XCTestCase {
-    func testSortingPerformance() {
-        let numbers = (0..<10000).shuffled()
-
-        measure {
-            _ = numbers.sorted()
-        }
-    }
-
-    func testCustomMetrics() {
-        let metrics: [XCTMetric] = [
-            XCTClockMetric(),
-            XCTCPUMetric(),
-            XCTMemoryMetric(),
-            XCTStorageMetric()
-        ]
-
-        let options = XCTMeasureOptions()
-        options.iterationCount = 10
-
-        measure(metrics: metrics, options: options) {
-            performExpensiveOperation()
-        }
-    }
-}
-```
-
-## UI Testing
-
-```swift
-final class AppUITests: XCTestCase {
-    var app: XCUIApplication!
-
-    override func setUp() {
-        super.setUp()
-        continueAfterFailure = false
-        app = XCUIApplication()
-        app.launch()
-    }
-
-    func testLoginFlow() {
-        // Test UI interactions
-        let emailField = app.textFields["Email"]
-        emailField.tap()
-        emailField.typeText("test@example.com")
-
-        let passwordField = app.secureTextFields["Password"]
-        passwordField.tap()
-        passwordField.typeText("password123")
-
-        app.buttons["Login"].tap()
-
-        // Verify navigation
-        XCTAssertTrue(app.navigationBars["Dashboard"].exists)
-    }
-
-    func testButtonEnabled() {
-        let button = app.buttons["Submit"]
-        XCTAssertFalse(button.isEnabled)
-
-        app.textFields["Username"].tap()
-        app.textFields["Username"].typeText("testuser")
-
-        XCTAssertTrue(button.isEnabled)
-    }
-}
-```
-
-## Testing Actors
-
-```swift
-final class ActorTests: XCTestCase {
-    func testActorIsolation() async throws {
-        actor Counter {
-            private var value = 0
-
-            func increment() -> Int {
-                value += 1
-                return value
-            }
-
-            func reset() {
-                value = 0
-            }
-        }
-
-        let counter = Counter()
-
-        // Test concurrent access
-        await withTaskGroup(of: Int.self) { group in
-            for _ in 0..<100 {
-                group.addTask {
-                    await counter.increment()
-                }
-            }
-        }
-
-        let finalValue = await counter.increment()
-        XCTAssertEqual(finalValue, 101)
-    }
-}
-```
-
-## Snapshot Testing
-
-```swift
-import SnapshotTesting
-
-final class ViewSnapshotTests: XCTestCase {
-    func testButtonAppearance() {
-        let button = UIButton()
-        button.setTitle("Tap Me", for: .normal)
-        button.backgroundColor = .blue
-        button.frame = CGRect(x: 0, y: 0, width: 200, height: 50)
-
-        assertSnapshot(matching: button, as: .image)
-    }
-
-    func testViewControllerLayout() {
-        let vc = MyViewController()
-        assertSnapshot(matching: vc, as: .image(on: .iPhone13))
-    }
-
-    func testDarkMode() {
-        let view = MyView()
-        assertSnapshot(matching: view, as: .image(traits: .init(userInterfaceStyle: .dark)))
-    }
-}
-```
-
-## Test Organization
-
-```swift
-// MARK: - Test Cases
-extension UserManagerTests {
-    // MARK: Creation Tests
-    func testUserCreation() { }
-    func testUserCreationWithInvalidData() { }
-
-    // MARK: Validation Tests
-    func testEmailValidation() { }
-    func testPasswordValidation() { }
-
-    // MARK: Persistence Tests
-    func testUserSave() { }
-    func testUserLoad() { }
-}
-
-// MARK: - Test Helpers
-extension UserManagerTests {
-    func makeTestUser() -> User {
-        User(name: "Test", email: "test@example.com")
-    }
-
-    func setupMockData() {
-        // Common test setup
-    }
-}
+## Framework choice: XCTest vs Swift Testing
+- Swift Testing (Xcode 16 / iOS 18, Swift 6) — new default for unit tests. `@Test` funcs (free functions or in a `struct`), `#expect(...)` (soft, keeps going) and `#require(...)` (throws/stops on failure). Parameterized via `@Test(arguments:)`. `#expect(throws:)` for errors. Uses `Suite`/`struct` with fresh instance per test — no shared mutable state, better parallelism.
+- XCTest — still required for UI tests (`XCUIApplication`) and performance tests (`measure`); use for pre-Xcode-16 / older deployment. Class subclasses `XCTestCase`, `XCTAssert*`, `setUp`/`tearDown`.
+- Directive: new unit tests → Swift Testing on Xcode 16+; keep XCTest for UI/perf and legacy suites. The two can coexist in one target.
+
+## XCTest essentials (literal APIs)
+- `@testable import MyApp` — access internal symbols.
+- Lifecycle: `override func setUp()` / `tearDown()` (call `super`). `setUp() async throws` variant for async setup.
+- Assertions: `XCTAssertEqual`, `XCTAssertNil`/`NotNil`, `XCTAssertTrue`/`False`.
+- `try XCTUnwrap(optional)` — fail-and-stop unwrap instead of force-unwrap in tests.
+
+## Async testing
+- `func testX() async throws` — await the code directly; no expectations needed for simple async.
+- `XCTestExpectation` + `await fulfillment(of:timeout:)` — only for callback/delegate/Notification APIs you can't `await`. In Swift Testing use `confirmation { }` instead.
+- `async let` in tests to exercise concurrent paths. Consume `AsyncSequence` with `for try await` + `break`.
+- Gotcha: no built-in per-test timeout for `async`; a hung `await` hangs the test. Wrap in a task-group timeout helper (spawn work + a `Task.sleep` racer) if the operation can stall.
+
+## Mocking / test doubles
+- Depend on a `protocol`, inject the real impl in prod and a double in tests — the core testability lever.
+- Mock — records calls + flags (`fetchCalled`, captured args) and returns configured results/errors; assert on interactions.
+- Stub — returns canned responses (e.g. a `Result` property).
+- Spy — records interactions on a real-ish object (delegate call counts).
+- Fake — lightweight working impl (in-memory dict as a DB).
+- Directive: pick by intent — verifying interactions → mock/spy; supplying inputs → stub/fake.
+
+## Performance testing (XCTest only)
+- `measure { }` — baseline timing. `measure(metrics:options:)` with `XCTClockMetric`, `XCTCPUMetric`, `XCTMemoryMetric`, `XCTStorageMetric`; `XCTMeasureOptions().iterationCount`.
+
+## UI testing (XCTest only)
+- `XCUIApplication().launch()` in `setUp`; set `continueAfterFailure = false`.
+- Query by accessibility id: `app.textFields["Email"]`, `app.secureTextFields[...]`, `app.buttons[...]`; `.tap()`, `.typeText(_)`, assert `.exists` / `.isEnabled`.
+
+## Actors & snapshot
+- Test actor isolation by hammering with a `withTaskGroup` of concurrent `await`s, then assert the final serialized value.
+- Snapshot testing needs the third-party `SnapshotTesting` package: `assertSnapshot(matching:as:)` with `.image`, `.image(on: .iPhone13)`, or `.image(traits:)` for dark mode.
+
+## xcodebuild test invocations (KEEP literal)
+```bash
+# Run all tests on a simulator
+xcodebuild test \
+  -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest'
+
+# Run a specific test (Swift Testing or XCTest): Target/Suite-or-Class/method
+xcodebuild test \
+  -scheme MyApp \
+  -destination 'platform=iOS Simulator,name=iPhone 15' \
+  -only-testing:MyAppTests/UserTests/testUserCreation
+
+# SwiftPM package tests
+swift test
+swift test --filter UserTests
 ```
 
 ## Best Practices
-
-- Use `@testable import` to test internal types
-- One assertion concept per test (can have multiple XCTAssert calls)
-- Use Given-When-Then pattern for clarity
-- Name tests descriptively: `test_methodName_condition_expectedResult`
-- Use setUp/tearDown for common test setup
-- Prefer dependency injection for testability
-- Use protocols to enable mocking
-- Test edge cases and error conditions
-- Use async/await for testing async code
-- Measure performance with XCTest metrics
-- Use UI testing for critical user flows
-- Mock external dependencies
-- Keep tests fast and independent
-- Use test doubles appropriately (mock, stub, spy, fake)
+- `@testable import` for internals; one concept per test; Given-When-Then.
+- Name `test_method_condition_expectedResult`.
+- Inject via protocols; test edge/error cases; keep tests fast and independent.
+- New unit tests on Xcode 16+ → Swift Testing (`@Test`/`#expect`); XCTest for UI/perf.

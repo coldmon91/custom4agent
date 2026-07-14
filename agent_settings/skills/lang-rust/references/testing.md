@@ -1,470 +1,73 @@
 # Testing in Rust
 
-## Unit Tests
+## Unit tests
 
-```rust
-// Tests in same file
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_addition() {
-        assert_eq!(2 + 2, 4);
-    }
-
-    #[test]
-    fn test_subtraction() {
-        assert!(10 - 5 == 5);
-    }
-
-    #[test]
-    #[should_panic(expected = "division by zero")]
-    fn test_panic() {
-        divide(10, 0);
-    }
-
-    #[test]
-    fn test_result() -> Result<(), String> {
-        let result = divide(10, 2)?;
-        assert_eq!(result, 5);
-        Ok(())
-    }
-
-    #[test]
-    #[ignore]
-    fn expensive_test() {
-        // Run with: cargo test -- --ignored
-    }
-}
-
-// Assertions
-fn assert_examples() {
-    assert!(true);
-    assert_eq!(2 + 2, 4);
-    assert_ne!(2 + 2, 5);
-
-    // Custom messages
-    assert!(value > 0, "Value must be positive, got {}", value);
-    assert_eq!(result, expected, "Calculation failed");
-}
-```
+- `#[cfg(test)] mod tests { use super::*; }` — colocate unit tests in the source file; `#[cfg(test)]` keeps them out of the release build. This is the only place unit tests belong (they can reach private items).
+- `#[test]` marks a test fn. `#[should_panic(expected = "substr")]` asserts a panic containing `substr` — keep `expected` specific or it hides the wrong panic.
+- `#[ignore]` skips by default; run with `cargo test -- --ignored`. Use for slow/expensive tests.
+- A test fn may return `Result<(), E>` so you can use `?` instead of `unwrap`; returning `Err` fails the test.
+- Assertions: `assert!`, `assert_eq!`, `assert_ne!`. All take a trailing custom-message format string. Prefer `assert_eq!` over `assert!(a == b)` — it prints both values on failure.
 
 ## Doctests
 
-```rust
-/// Adds two numbers together.
-///
-/// # Examples
-///
-/// ```
-/// use mylib::add;
-///
-/// let result = add(2, 3);
-/// assert_eq!(result, 5);
-/// ```
-///
-/// ```should_panic
-/// use mylib::divide;
-///
-/// divide(10, 0);  // This will panic
-/// ```
-///
-/// ```ignore
-/// // This code won't compile but won't fail the test
-/// let x = undefined_function();
-/// ```
-pub fn add(a: i32, b: i32) -> i32 {
-    a + b
-}
-```
-
-## Integration Tests
-
-```rust
-// tests/integration_test.rs
-use mylib;
-
-#[test]
-fn test_full_workflow() {
-    let config = mylib::Config::new("test.conf");
-    let result = mylib::process(&config);
-    assert!(result.is_ok());
-}
-
-// tests/common/mod.rs - shared test utilities
-pub fn setup() -> TestContext {
-    TestContext {
-        db: create_test_db(),
-    }
-}
-
-// tests/another_test.rs
-mod common;
-
-#[test]
-fn test_with_common() {
-    let ctx = common::setup();
-    // Use ctx...
-}
-```
-
-## Test Organization
-
-```rust
-// Nested test modules
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    mod addition {
-        use super::*;
-
-        #[test]
-        fn positive_numbers() {
-            assert_eq!(add(2, 3), 5);
-        }
-
-        #[test]
-        fn negative_numbers() {
-            assert_eq!(add(-2, -3), -5);
-        }
-    }
-
-    mod subtraction {
-        use super::*;
-
-        #[test]
-        fn test_subtract() {
-            assert_eq!(subtract(10, 5), 5);
-        }
-    }
-}
-```
-
-## Test Fixtures and Setup
-
-```rust
-struct TestContext {
-    temp_dir: std::path::PathBuf,
-    db: Database,
-}
-
-impl TestContext {
-    fn setup() -> Self {
-        let temp_dir = std::env::temp_dir().join("test");
-        std::fs::create_dir_all(&temp_dir).unwrap();
-
-        Self {
-            temp_dir,
-            db: Database::connect_test(),
-        }
-    }
-}
-
-impl Drop for TestContext {
-    fn drop(&mut self) {
-        // Cleanup
-        std::fs::remove_dir_all(&self.temp_dir).ok();
-        self.db.disconnect();
-    }
-}
-
-#[test]
-fn test_with_fixture() {
-    let ctx = TestContext::setup();
-    // Test uses ctx...
-    // Automatic cleanup via Drop
-}
-```
-
-## Async Tests
-
-```rust
-use tokio;
-
-#[tokio::test]
-async fn test_async_function() {
-    let result = async_operation().await;
-    assert_eq!(result, 42);
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn test_with_custom_runtime() {
-    let result = concurrent_operation().await;
-    assert!(result.is_ok());
-}
-
-// Testing async with timeout
-#[tokio::test]
-async fn test_with_timeout() {
-    let timeout = std::time::Duration::from_secs(5);
-    let result = tokio::time::timeout(timeout, slow_operation()).await;
-    assert!(result.is_ok());
-}
-```
-
-## Property-Based Testing (proptest)
-
-```rust
-use proptest::prelude::*;
-
-// Simple property test
-proptest! {
-    #[test]
-    fn test_reversing_twice_is_identity(ref s in ".*") {
-        let reversed: String = s.chars().rev().collect();
-        let double_reversed: String = reversed.chars().rev().collect();
-        assert_eq!(s, &double_reversed);
-    }
-}
-
-// Custom strategies
-proptest! {
-    #[test]
-    fn test_addition_commutative(a in 0..1000i32, b in 0..1000i32) {
-        assert_eq!(a + b, b + a);
-    }
-
-    #[test]
-    fn test_vector_push_pop(
-        ref v in prop::collection::vec(0..100i32, 0..100),
-        item in 0..100i32
-    ) {
-        let mut v = v.clone();
-        v.push(item);
-        assert_eq!(v.pop(), Some(item));
-    }
-}
-
-// Complex custom strategies
-fn user_strategy() -> impl Strategy<Value = User> {
-    (1..1000u64, "[a-z]{3,10}", "[a-z0-9.]+@[a-z]+\\.[a-z]+")
-        .prop_map(|(id, name, email)| User { id, name, email })
-}
-
-proptest! {
-    #[test]
-    fn test_user_serialization(user in user_strategy()) {
-        let json = serde_json::to_string(&user).unwrap();
-        let deserialized: User = serde_json::from_str(&json).unwrap();
-        assert_eq!(user, deserialized);
-    }
-}
-```
-
-## Mocking
-
-```rust
-// Using mockall
-use mockall::*;
-use mockall::predicate::*;
-
-#[automock]
-trait Database {
-    fn get_user(&self, id: u64) -> Option<User>;
-    fn save_user(&mut self, user: User) -> Result<(), Error>;
-}
-
-#[test]
-fn test_with_mock() {
-    let mut mock = MockDatabase::new();
-
-    mock.expect_get_user()
-        .with(eq(1))
-        .times(1)
-        .returning(|_| Some(User { id: 1, name: "Alice".to_string() }));
-
-    mock.expect_save_user()
-        .times(1)
-        .returning(|_| Ok(()));
-
-    // Use mock in test
-    let user = mock.get_user(1);
-    assert!(user.is_some());
-}
-```
-
-## Benchmarks (Criterion)
-
-```rust
-// benches/my_benchmark.rs
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
-
-fn fibonacci(n: u64) -> u64 {
-    match n {
-        0 => 1,
-        1 => 1,
-        n => fibonacci(n - 1) + fibonacci(n - 2),
-    }
-}
-
-fn criterion_benchmark(c: &mut Criterion) {
-    c.bench_function("fib 20", |b| b.iter(|| fibonacci(black_box(20))));
-}
-
-criterion_group!(benches, criterion_benchmark);
-criterion_main!(benches);
-
-// Cargo.toml:
-// [dev-dependencies]
-// criterion = "0.5"
-//
-// [[bench]]
-// name = "my_benchmark"
-// harness = false
-```
-
-## Advanced Benchmarking
-
-```rust
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-
-fn bench_multiple_sizes(c: &mut Criterion) {
-    let mut group = c.benchmark_group("sorting");
-
-    for size in [10, 100, 1000, 10000].iter() {
-        group.bench_with_input(BenchmarkId::from_parameter(size), size, |b, &size| {
-            b.iter_batched(
-                || generate_random_vec(size),
-                |mut v| v.sort(),
-                criterion::BatchSize::SmallInput,
-            );
-        });
-    }
-
-    group.finish();
-}
-
-// Comparing implementations
-fn bench_comparison(c: &mut Criterion) {
-    let mut group = c.benchmark_group("string_search");
-
-    group.bench_function("naive", |b| {
-        b.iter(|| naive_search(black_box("haystack"), black_box("needle")))
-    });
-
-    group.bench_function("optimized", |b| {
-        b.iter(|| optimized_search(black_box("haystack"), black_box("needle")))
-    });
-
-    group.finish();
-}
-
-criterion_group!(benches, bench_multiple_sizes, bench_comparison);
-criterion_main!(benches);
-```
-
-## Testing with External Resources
-
-```rust
-// Testing file I/O
-#[test]
-fn test_file_operations() {
-    use std::io::Write;
-
-    let temp_dir = std::env::temp_dir();
-    let file_path = temp_dir.join("test_file.txt");
-
-    // Write
-    let mut file = std::fs::File::create(&file_path).unwrap();
-    file.write_all(b"test content").unwrap();
-
-    // Read
-    let content = std::fs::read_to_string(&file_path).unwrap();
-    assert_eq!(content, "test content");
-
-    // Cleanup
-    std::fs::remove_file(&file_path).unwrap();
-}
-
-// Testing with databases (using sqlx)
-#[sqlx::test]
-async fn test_database_operations(pool: sqlx::PgPool) -> sqlx::Result<()> {
-    sqlx::query("INSERT INTO users (name) VALUES ($1)")
-        .bind("Alice")
-        .execute(&pool)
-        .await?;
-
-    let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM users")
-        .fetch_one(&pool)
-        .await?;
-
-    assert_eq!(count.0, 1);
-    Ok(())
-}
-```
-
-## Snapshot Testing
-
-```rust
-// Using insta crate
-use insta::assert_snapshot;
-
-#[test]
-fn test_output_format() {
-    let data = generate_complex_output();
-    assert_snapshot!(data);
-}
-
-#[test]
-fn test_json_output() {
-    let json = serde_json::to_string_pretty(&get_data()).unwrap();
-    assert_snapshot!(json);
-}
-
-// Run with: cargo insta test
-// Review snapshots: cargo insta review
-```
-
-## Code Coverage
-
-```rust
-// Using tarpaulin
-// cargo install cargo-tarpaulin
-// cargo tarpaulin --out Html --output-dir coverage
-
-// Using llvm-cov
-// cargo install cargo-llvm-cov
-// cargo llvm-cov --html
-```
-
-## Fuzzing
-
-```rust
-// Using cargo-fuzz
-// cargo install cargo-fuzz
-// cargo fuzz init
-
-// fuzz/fuzz_targets/fuzz_target_1.rs
-#![no_main]
-use libfuzzer_sys::fuzz_target;
-
-fuzz_target!(|data: &[u8]| {
-    if let Ok(s) = std::str::from_utf8(data) {
-        let _ = mylib::parse_input(s);
-    }
-});
-
-// Run with: cargo fuzz run fuzz_target_1
-```
-
-## Best Practices
-
-- Write tests alongside production code in #[cfg(test)] modules
-- Use integration tests in tests/ directory for end-to-end testing
-- Include doctests in documentation for examples that must work
-- Use descriptive test names that explain what is being tested
-- Test edge cases (empty inputs, max values, etc.)
-- Use property-based testing for algorithmic code
-- Benchmark performance-critical code with criterion
-- Run tests in CI with cargo test --all-features
-- Use cargo test -- --nocapture to see println! output
-- Test error conditions with #[should_panic] or Result
-- Mock external dependencies for unit tests
-- Use test fixtures for complex setup/teardown
-- Run clippy on test code too
-- Measure code coverage and aim for high coverage
-- Use fuzzing for security-critical parsers
-- Test async code with tokio::test
-- Use snapshot testing for complex output validation
+- Code fences in `///` doc comments compile and run under `cargo test`. Keeps examples honest.
+- Fence annotations: ` ```should_panic `, ` ```ignore ` (don't run), ` ```no_run ` (compile but don't execute), ` ```compile_fail `, ` ```text ` (not Rust). Hide setup lines from rendered docs with a leading `# `.
+- Gotcha: doctests run against the **public** API only, as an external crate would — private items aren't visible.
+
+## Integration tests
+
+- Files in `tests/` are each compiled as a **separate crate** that links your lib as an external dependency — they exercise only the public API. Good for end-to-end workflows.
+- Shared helpers go in `tests/common/mod.rs` (the `mod.rs` form, not `tests/common.rs`, so it isn't treated as its own test crate).
+
+## Async tests
+
+- `#[tokio::test]` replaces `#[test]` for `async fn`. `#[tokio::test(flavor = "multi_thread", worker_threads = 2)]` when the test needs real parallelism.
+- Wrap flaky/slow awaits in `tokio::time::timeout` so a hang fails instead of stalling CI.
+
+## Property-based testing — proptest / quickcheck
+
+- Reach for `proptest` when testing algebraic properties (round-trips, invariants, commutativity) rather than fixed examples; it shrinks failing cases to a minimal counterexample.
+- `proptest! { #[test] fn p(x in strategy) { prop_assert!(...) } }` — inputs come from `Strategy`s (ranges, regex strings, `prop::collection::vec`, `.prop_map` to build structs).
+- Use for parsers, serializers, and pure algorithmic code; not worth it for I/O-bound logic.
+
+## Mocking — mockall
+
+- `#[automock]` on a trait generates `MockYourTrait`; set expectations with `.expect_method().with(eq(..)).times(n).returning(|..| ..)`.
+- Directive: design against traits at boundaries so unit tests inject mocks; don't mock what you can construct cheaply for real.
+
+## Benchmarking — criterion
+
+- Use `criterion` (stable) over the built-in `#[bench]` (nightly-only). Add to `[dev-dependencies]` and declare the bench with `harness = false`:
+  ```toml
+  [dev-dependencies]
+  criterion = "0.5"
+
+  [[bench]]
+  name = "my_benchmark"
+  harness = false
+  ```
+- `criterion_group!` + `criterion_main!` wire up `benches/*.rs`. Wrap inputs/outputs in `black_box(..)` to stop the optimizer folding the work away.
+- `benchmark_group` + `bench_with_input` / `BenchmarkId` to sweep sizes; `iter_batched(setup, routine, BatchSize::_)` when each iteration needs fresh, non-reusable state.
+
+## Snapshot testing — insta
+
+- `insta::assert_snapshot!` (or `assert_json_snapshot!`) for large/structured output you don't want to hand-assert. Review changes with `cargo insta review`, run via `cargo insta test`.
+
+## Coverage & fuzzing (exact invocations)
+
+- Coverage: `cargo llvm-cov --html` (preferred, LLVM source-based) or `cargo tarpaulin --out Html`.
+- Fuzzing: `cargo fuzz init` then `cargo fuzz run <target>`; target is `fuzz_target!(|data: &[u8]| { ... })` with `#![no_main]` + `libfuzzer_sys`. Use for parsers and any code consuming untrusted bytes.
+
+## cargo test invocations (keep literal)
+
+- `cargo test` — run all; `cargo test <substr>` — filter by name substring.
+- `cargo test -- --nocapture` — show `println!` output (captured by default on pass).
+- `cargo test -- --ignored` — run only `#[ignore]` tests; `--include-ignored` for both.
+- `cargo test -- --test-threads=1` — serialize (tests run in parallel by default; watch shared global/file state).
+- `cargo test --all-features` (or `--doc` / `--test <name>` / `--lib`) to scope what runs.
+
+## Best practices
+
+- Test edge cases: empty, boundary, and max values.
+- Use RAII (`Drop`) or fixtures for setup/teardown so cleanup runs even on panic; prefer the `tempfile` crate over hand-managed temp paths.
+- Run clippy over test code too; measure coverage but treat it as a floor, not a goal.

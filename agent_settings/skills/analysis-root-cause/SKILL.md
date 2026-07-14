@@ -1,5 +1,5 @@
 ---
-name: root-cause-analysis
+name: analysis-root-cause
 description: Systematic bug investigation workflow that enforces a reproduce → hypothesize → verify loop instead of jumping to fixes. Use this skill whenever the user reports a bug, unexpected behavior, crash, flaky test, regression, "it works on my machine" issue, intermittent failure, or anything where the root cause is not yet understood — even if the user only says "this is broken" or "fix this bug". Also use when the user asks to investigate, diagnose, or debug something, or when a fix is being proposed without confirmed evidence of the underlying cause.
 ---
 

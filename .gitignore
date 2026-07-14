@@ -5,6 +5,7 @@ sessions/
 *.7z
 agent_settings/skills/my-remote/
 
+.system/
 # OS
 .DS_Store
 

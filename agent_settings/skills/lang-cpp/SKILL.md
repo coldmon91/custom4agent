@@ -50,60 +50,14 @@ Load detailed guidance based on context:
 - Write const-correct code
 
 ### MUST NOT DO
-- Use raw `new`/`delete` (prefer smart pointers)
+- raw `new`/`delete` (prefer smart pointers)
 - Ignore compiler warnings
-- Use C-style casts (use static_cast, etc.)
+- C-style casts (use static_cast, etc.)
 - Mix exception and error code patterns inconsistently
 - Write non-const-correct code
-- Use `using namespace std` in headers
+- `using namespace std` in headers
 - Ignore undefined behavior
 - Skip move semantics for expensive types
-
-## Key Patterns
-
-### Concept Definition (C++20)
-```cpp
-// Define a reusable, self-documenting constraint
-template<typename T>
-concept Numeric = std::integral<T> || std::floating_point<T>;
-
-template<Numeric T>
-T clamp(T value, T lo, T hi) {
-    return std::clamp(value, lo, hi);
-}
-```
-
-### RAII Resource Wrapper
-```cpp
-// Wraps a raw handle; no manual cleanup needed at call sites
-class FileHandle {
-public:
-    explicit FileHandle(const char* path)
-        : handle_(std::fopen(path, "r")) {
-        if (!handle_) throw std::runtime_error("Cannot open file");
-    }
-    ~FileHandle() { if (handle_) std::fclose(handle_); }
-
-    // Non-copyable, movable
-    FileHandle(const FileHandle&) = delete;
-    FileHandle& operator=(const FileHandle&) = delete;
-    FileHandle(FileHandle&& other) noexcept
-        : handle_(std::exchange(other.handle_, nullptr)) {}
-
-    std::FILE* get() const noexcept { return handle_; }
-private:
-    std::FILE* handle_;
-};
-```
-
-### Smart Pointer Ownership
-```cpp
-// Prefer make_unique / make_shared; avoid raw new/delete
-auto buffer = std::make_unique<std::array<std::byte, 4096>>();
-
-// Shared ownership only when genuinely needed
-auto config = std::make_shared<Config>(parseArgs(argc, argv));
-```
 
 ## Output Templates
 

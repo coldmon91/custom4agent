@@ -1,136 +1,138 @@
 ---
 name: debugging
 description: >
-  버그 진단·수정 작업의 진입점. 사용자가 크래시, undefined behavior, 메모리 오류,
-  동시성 문제, 예기치 않은 동작 등 디버깅을 요청하면 이 스킬을 통해 증상에 맞는
-  하위 references 가이드(use-after-free 등)로 라우팅한다. 또한 모든 디버깅 작업에
-  공통으로 적용되는 원칙(증상 vs 근본 원인, 재현·가설·검증 루프, band-aid 수정 금지)을
-  제공한다. 트리거 예시: "이 크래시 좀 봐줘", "SIGSEGV가 나는데 원인 찾아줘",
+  Entry point for bug diagnosis and fixing. When the user requests debugging of
+  crashes, undefined behavior, memory errors, concurrency issues, or unexpected
+  behavior, this skill routes to the matching sub-reference guide (e.g.
+  use-after-free) for the symptom. It also provides principles common to all
+  debugging work (symptom vs root cause, reproduce-hypothesize-verify loop, no
+  band-aid fixes). Trigger examples: "이 크래시 좀 봐줘", "SIGSEGV가 나는데 원인 찾아줘",
   "이미 해제된 포인터", "race condition", "deadlock", "메모리 누수", "NULL 역참조",
   "ASan/TSan/Valgrind 리포트", "AI agent에게 버그 수정을 위임할 지침이 필요해".
 ---
 
 # Debugging Skill
 
-버그 진단·수정 작업의 진입점이자 라우터.
+Entry point and router for bug diagnosis and fixing.
 
-## 이 스킬의 역할
+## Role of this skill
 
-1. **공통 원칙 제공** — 모든 디버깅 작업에 적용되는 사고 절차와 금지 패턴.
-2. **하위 가이드로 라우팅** — 증상·버그 유형에 맞는 references 파일을 선택해 읽도록 안내.
-3. **AI agent 위임 시 지침 표준화** — 버그 수정 위임 시 band-aid 수정을 방지하기 위한 공통 템플릿.
+1. **Provide common principles** — the reasoning procedure and forbidden patterns that apply to all debugging.
+2. **Route to sub-guides** — select and read the references file matching the symptom/bug type.
+3. **Standardize AI agent delegation** — a common template to prevent band-aid fixes when delegating bug fixes.
 
-이 스킬 자체는 특정 버그 유형의 상세 진단·수정 절차를 담지 않는다. 상세 절차는 `references/<topic>.md`에 있다.
-
----
-
-## 사용 절차
-
-### Step 1: 증상 분류 → 하위 가이드 선택
-
-사용자의 보고·로그·코드에서 다음 신호를 확인하고, 매칭되는 references 파일을 **반드시 먼저 읽고** 그 가이드의 절차를 따른다.
-
-| 증상·키워드 | 참고 파일 |
-|-------------|-----------|
-| use-after-free, dangling pointer, double free, 삭제된 객체 역참조, heap-use-after-free (ASan), 멀티스레드 메모리 버그, 종료 후 콜백/이벤트 처리 | [`references/use-after-free.md`](references/use-after-free.md) |
-
-매칭되는 항목이 **없는 경우** — 아직 references 파일이 없는 주제다. 아래 "공통 원칙"만 적용하고, 사용자에게 해당 유형의 참고 가이드가 아직 작성되지 않았음을 알린 뒤 일반적인 디버깅 절차로 진행한다.
-
-매칭이 **여러 개**인 경우 — 가장 먼저 드러난 증상의 가이드를 우선 읽되, 분석 도중 다른 유형이 진짜 원인으로 드러나면 해당 가이드도 추가로 읽는다.
-
-### Step 2: 공통 원칙 적용
-
-하위 가이드의 절차를 따르되, 아래 원칙은 모든 디버깅 작업에 공통으로 적용된다.
+This skill itself does not hold detailed diagnosis/fix procedures for specific bug types. Those live in `references/<topic>.md`.
 
 ---
 
-## 공통 원칙
+## Procedure
 
-### 1. 증상이 아니라 근본 원인을 수정한다
+### Step 1: Classify symptom → select sub-guide
 
-크래시·에러가 발생하는 **직전 지점**을 막는 수정은 거의 항상 잘못된 수정이다. 증상은 더 깊은 원인의 표면이며, 표면을 가리면 원인은 다른 형태로 다시 나타나거나 조용히 상태를 오염시킨다.
+From the user's report, logs, or code, check for the signals below, and **read the matching references file first** and follow its procedure.
+
+| Symptom / keyword | Reference file |
+|-------------------|----------------|
+| use-after-free, dangling pointer, double free, dereferencing a deleted object, heap-use-after-free (ASan), multithreaded memory bug, callback/event handling after shutdown | [`references/use-after-free.md`](references/use-after-free.md) |
+
+If **no** entry matches — it's a topic without a references file yet. Apply only the "common principles" below, tell the user that a reference guide for this type is not yet written, and proceed with general debugging.
+
+If **multiple** match — read the guide for the earliest-visible symptom first, but if another type turns out to be the real cause during analysis, read that guide too.
+
+### Step 2: Apply common principles
+
+Follow the sub-guide's procedure, but the principles below apply to all debugging.
+
+---
+
+## Common principles
+
+### 1. Fix the root cause, not the symptom
+
+A fix that blocks the **point just before** a crash/error is almost always wrong. A symptom is the surface of a deeper cause; masking the surface makes the cause reappear in another form or silently corrupt state.
 
 ```
-잘못된 사고:    "이 줄에서 크래시 → 이 줄을 보호하자"
-올바른 사고:    "이 줄에서 크래시 → 왜 이 줄에 도달할 수 있는가 → 도달 자체를 막자"
+Wrong thinking:    "crash on this line → guard this line"
+Right thinking:    "crash on this line → why can this line be reached → prevent the reach itself"
 ```
 
-### 2. 재현 → 가설 → 검증 루프
+### 2. Reproduce → hypothesize → verify loop
 
-수정 코드를 작성하기 **전에** 다음을 완료한다:
+**Before** writing fix code, complete:
 
-1. **재현(Reproduce)** — 최소 재현 케이스를 확보. 재현이 불안정하면 race condition·timing 의존성을 우선 의심.
-2. **가설(Hypothesize)** — 관찰된 증상과 코드·로그의 정합성으로 가설을 세움. "왜 이런 상태가 가능한가"를 답해야 함.
-3. **검증(Verify)** — 가설이 옳다면 어떤 추가 증거가 있어야 하는지 정하고, 그 증거를 확보.
+1. **Reproduce** — secure a minimal repro case. If the repro is unstable, suspect race condition / timing dependency first.
+2. **Hypothesize** — form a hypothesis from the consistency between observed symptoms and code/logs. It must answer "why is this state possible."
+3. **Verify** — decide what additional evidence should exist if the hypothesis is correct, and secure that evidence.
 
-가설 없이 코드만 수정하면 우연한 동작 변화로 증상이 사라질 수 있지만, 원인은 남아있다.
+Fixing code without a hypothesis may make the symptom vanish through an accidental behavior change while the cause remains.
 
-### 3. Band-aid 수정 금지
+### 3. No band-aid fixes
 
-다음 패턴은 거의 항상 잘못된 수정이다:
+The following patterns are almost always wrong fixes:
 
-- 역참조·접근 직전에 NULL·유효성 체크를 추가해 "안전하게 스킵"
-- 예외·panic을 try-catch·`Result`로 삼키기 (정의되지 않은 동작은 예외가 아니다)
-- flag 변수로 "유효함"을 추적 (flag 자체에 race가 발생)
-- 우연히 동작하는 ordering·sleep·retry 추가
-- 로그만 추가하고 동작은 그대로 두기
+- Adding a NULL/validity check just before dereference/access to "safely skip"
+- Swallowing exceptions/panics with try-catch or `Result` (undefined behavior is not an exception)
+- Tracking "validity" with a flag variable (the flag itself races)
+- Adding ordering/sleep/retry that happens to work
+- Adding only logs while leaving behavior unchanged
 
-이 패턴들이 정당화되는 경우는 극히 드물며, 정당화하려면 **왜 근본 원인 수정이 불가능한지** 명시적으로 설명할 수 있어야 한다.
+These patterns are rarely justified; to justify one, you must be able to explicitly explain **why a root-cause fix is impossible**.
 
-### 4. 도구로 검증한다
+### 4. Verify with tools
 
-가능한 경우 다음 도구로 가설·수정을 교차 검증한다:
+When possible, cross-check hypotheses/fixes with these tools:
 
 - **AddressSanitizer (ASan)** — heap-use-after-free, buffer overflow, double-free
 - **ThreadSanitizer (TSan)** — data race
-- **UndefinedBehaviorSanitizer (UBSan)** — UB 일반
-- **MemorySanitizer (MSan)** — 초기화되지 않은 메모리 사용
-- **Valgrind (memcheck/helgrind)** — 메모리·lock ordering 문제
-- **gdb/lldb + core dump** — 크래시 시점의 상태 검사
-- **rr (record-replay)** — 결정적 재현이 어려운 race 디버깅
+- **UndefinedBehaviorSanitizer (UBSan)** — UB in general
+- **MemorySanitizer (MSan)** — use of uninitialized memory
+- **Valgrind (memcheck/helgrind)** — memory / lock ordering issues
+- **gdb/lldb + core dump** — inspect state at crash time
+- **rr (record-replay)** — debugging races that are hard to reproduce deterministically
 
-도구 출력만으로 결론을 내지 말고, 그 결과가 **가설을 어떻게 지지·반증하는지** 명시한다.
+Do not conclude from tool output alone; state **how the result supports or refutes the hypothesis**.
 
-### 5. 수정의 구조적 정당성을 설명한다
+### 5. Explain the structural justification of the fix
 
-수정이 완료되면 다음을 답할 수 있어야 한다:
+Once the fix is done, you should be able to answer:
 
-- 수정 후, 해당 증상이 발생하는 코드 경로가 **구조적으로 존재할 수 없는가**?
-- 단순히 "이제 안전해 보임"이 아니라, "왜 더 이상 불가능한가"를 설명할 수 있는가?
-- 새로 도입된 동기화·소유권 구조에서 **다른 race·deadlock·priority inversion**이 발생하지 않는가?
+- After the fix, can the code path producing that symptom **structurally no longer exist**?
+- Not merely "it looks safe now," but can you explain "why it is no longer possible"?
+- Does the newly introduced synchronization/ownership structure avoid **other races, deadlocks, or priority inversion**?
 
 ---
 
-## AI Agent에게 디버깅을 위임할 때
+## When delegating debugging to an AI agent
 
-버그 수정 작업을 다른 agent에게 위임할 때는 다음 공통 지침을 함께 전달하고, 해당 버그 유형의 references 파일을 명시적으로 참고하도록 지시한다.
+When delegating a bug fix to another agent, pass along the common instructions below and direct it to explicitly consult the references file for that bug type.
 
 ```markdown
-## 디버깅 위임 공통 지침
+## Common debugging delegation instructions
 
-1. 증상이 아니라 근본 원인을 수정한다. 크래시 직전 지점에 방어 코드를
-   추가하는 식의 minimal-change 수정을 금지한다.
-2. 수정 전에 (a) 재현, (b) 가설, (c) 검증 증거를 명시하라.
-3. 다음 band-aid 패턴을 사용하지 말라:
-   - 역참조 직전 NULL/유효성 체크
-   - try-catch / Result 로 정의되지 않은 동작을 삼키기
-   - flag 변수로 유효성 추적
-   - sleep/retry/ordering 으로 우연히 회피
-4. 수정 후, 해당 증상이 발생하는 경로가 구조적으로 존재할 수 없음을 설명하라.
-5. 해당 버그 유형의 상세 가이드(references/<topic>.md)를 반드시 먼저 읽고
-   그 절차를 따르라.
+1. Fix the root cause, not the symptom. Do not make minimal-change fixes
+   such as adding defensive code just before the crash point.
+2. Before fixing, state (a) reproduction, (b) hypothesis, (c) verification evidence.
+3. Do not use these band-aid patterns:
+   - NULL/validity check just before dereference
+   - swallowing undefined behavior with try-catch / Result
+   - tracking validity with a flag variable
+   - accidentally avoiding it with sleep/retry/ordering
+4. After the fix, explain that the path producing the symptom can no longer
+   structurally exist.
+5. Read the detailed guide for that bug type (references/<topic>.md) first
+   and follow its procedure.
 ```
 
-버그 유형이 특정되면, 해당 references 파일 내부의 **위임 지침 템플릿**이 더 구체적이므로 그것을 우선 사용한다.
+Once the bug type is identified, prefer the **delegation instruction template** inside that references file, as it is more specific.
 
 ---
 
-## references 디렉토리 확장 기준
+## Criteria for expanding the references directory
 
-새로운 버그 유형 가이드를 추가할 때의 기준:
+Criteria for adding a new bug-type guide:
 
-- **특화된 진단 절차가 있는가** — 일반 재현·가설·검증 루프 외에 해당 유형 고유의 분석 단계(예: UAF의 Lifetime Map, deadlock의 lock ordering 그래프)가 필요한 경우.
-- **band-aid 수정이 흔한가** — agent·개발자가 자주 빠지는 잘못된 수정 패턴이 있어 명시적 금지가 필요한 경우.
-- **수정 전략이 다양한가** — 단일 정답이 아니라 소유권·동기화·아키텍처 수준에서 선택지가 갈리는 경우.
+- **Is there a specialized diagnosis procedure** — when the type needs analysis steps of its own (e.g. UAF's Lifetime Map, deadlock's lock ordering graph) beyond the general reproduce-hypothesize-verify loop.
+- **Are band-aid fixes common** — when there is a wrong-fix pattern agents/developers often fall into that needs explicit prohibition.
+- **Are fix strategies varied** — when there is no single answer and choices diverge at the ownership/synchronization/architecture level.
 
-세 기준 중 둘 이상에 해당하면 별도 references 파일로 분리할 가치가 있다.
+If two or more of the three criteria apply, it is worth splitting into a separate references file.

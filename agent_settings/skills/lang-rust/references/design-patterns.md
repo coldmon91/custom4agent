@@ -51,41 +51,9 @@ Separate an algorithm from the data structure it operates on by defining a visit
 
 ### Builder
 
-Construct a complex object step by step. Define a separate builder type with optional fields and chained methods; `build()` creates the final object after validation.
+Construct a complex object step by step. Separate `XBuilder` struct holds `Option<Field>`s; consuming chained setters (`fn name(mut self, ..) -> Self`) return `self`; `build(self) -> Result<X, _>` validates required fields (`.ok_or(..)?`) and applies defaults (`.unwrap_or(..)`).
 
-```rust
-pub struct Config {
-    name: String,
-    threads: usize,
-}
-
-pub struct ConfigBuilder {
-    name: Option<String>,
-    threads: Option<usize>,
-}
-
-impl ConfigBuilder {
-    pub fn new() -> Self {
-        Self { name: None, threads: None }
-    }
-    pub fn name(mut self, name: impl Into<String>) -> Self {
-        self.name = Some(name.into());
-        self
-    }
-    pub fn threads(mut self, n: usize) -> Self {
-        self.threads = Some(n);
-        self
-    }
-    pub fn build(self) -> Result<Config, String> {
-        Ok(Config {
-            name: self.name.ok_or("missing name")?,
-            threads: self.threads.unwrap_or(1),
-        })
-    }
-}
-```
-
-**Trade-off**: Extra code and types; simple structs rarely need a builder.
+**Trade-off**: Extra code and types; simple structs rarely need a builder — prefer `Default` + struct-update syntax for optional-only fields.
 
 ### Fold
 

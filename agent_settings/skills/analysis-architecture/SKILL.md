@@ -1,5 +1,5 @@
 ---
-name: architecture-analyzer
+name: analysis-architecture
 description: "Project architecture analysis with object/function relationships, role identification, and data flow visualization using Mermaid diagrams. Use when the user asks to analyze project architecture, visualize module relationships, create class diagrams, data flow diagrams, or sequence diagrams for a codebase."
 ---
 

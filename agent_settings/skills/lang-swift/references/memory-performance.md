@@ -1,377 +1,53 @@
 # Memory & Performance
 
-## Automatic Reference Counting (ARC)
-
-```swift
-// Strong references (default)
-class Person {
-    let name: String
-    var apartment: Apartment?
-
-    init(name: String) {
-        self.name = name
-    }
-
-    deinit {
-        print("\(name) is being deinitialized")
-    }
-}
-
-class Apartment {
-    let unit: String
-    weak var tenant: Person?  // Weak to break retain cycle
-
-    init(unit: String) {
-        self.unit = unit
-    }
-
-    deinit {
-        print("Apartment \(unit) is being deinitialized")
-    }
-}
-
-var john: Person? = Person(name: "John")
-var unit4A: Apartment? = Apartment(unit: "4A")
-
-john?.apartment = unit4A
-unit4A?.tenant = john
-
-// Setting to nil will properly deallocate both
-john = nil
-unit4A = nil
-```
-
-## Weak and Unowned References
-
-```swift
-// Weak - optional reference that doesn't keep object alive
-class ViewController: UIViewController {
-    weak var delegate: ViewControllerDelegate?
-
-    func performAction() {
-        delegate?.didPerformAction()
-    }
-}
-
-// Unowned - non-optional reference, assumes target outlives owner
-class Customer {
-    let name: String
-    var card: CreditCard?
-
-    init(name: String) {
-        self.name = name
-    }
-}
-
-class CreditCard {
-    let number: String
-    unowned let customer: Customer  // Customer always outlives card
-
-    init(number: String, customer: Customer) {
-        self.number = number
-        self.customer = customer
-    }
-}
-
-// Unowned optional (Swift 5+)
-class Department {
-    var courses: [Course] = []
-}
-
-class Course {
-    unowned var department: Department
-    unowned var nextCourse: Course?
-
-    init(department: Department) {
-        self.department = department
-    }
-}
-```
+## ARC & Reference Kinds
+- `strong` (default) — keeps target alive. Two objects strongly referencing each other = retain cycle (leak); ARC never runs `deinit`.
+- `weak var` — optional, auto-niled on dealloc, does NOT keep target alive. Use for delegates, parent back-references, any reference that may outlive its target.
+- `unowned` — non-optional, does NOT keep alive, assumes target outlives self. Crashes on access after target is freed. Use only when lifetime is strictly guaranteed (e.g. `CreditCard.customer` where customer always outlives card).
+- Decision: cycle where the reference can go nil / outlive → `weak`. Cycle where target is guaranteed to outlive → `unowned` (faster, no optional). Unsure → `weak`.
 
 ## Capture Lists in Closures
+- `[weak self]` — for escaping closures stored on `self` (network callbacks, timers, Combine sinks) to break the closure→self cycle. Then `guard let self else { return }`.
+- `[unowned self]` — only when the closure provably cannot outlive `self`; crashes otherwise.
+- `[value]` — capture a snapshot by value (e.g. `[identifier]`) instead of capturing `self` just to read one property.
+- Gotcha: non-escaping closures (most `map`/`filter`, sync callbacks) don't need a capture list — no cycle risk.
 
-```swift
-class DataManager {
-    var data: [String] = []
+## Value vs Reference Types
+- `struct`/`enum` (value semantics) — default choice; copied on assignment, no ARC overhead, no sharing surprises.
+- `class` (reference semantics) — when you need identity, shared mutable state, inheritance, or deinit.
+- Copy-on-write: Swift's `Array`/`Dictionary`/`Set`/`String` copy lazily — an assignment is a cheap ref bump; deep copy happens only on mutation of a shared buffer.
 
-    func loadData() {
-        // Strong reference cycle - DataManager won't be deallocated
-        NetworkManager.fetch { response in
-            self.data = response  // self is captured strongly
-        }
+## Custom Copy-on-write
+- Wrap a reference-type `Storage` in a struct; in mutating setters call `isKnownUniquelyReferenced(&storage)` and clone only if not unique. Use for large value types with heap-backed storage to avoid needless copies.
 
-        // Weak self - breaks cycle
-        NetworkManager.fetch { [weak self] response in
-            guard let self = self else { return }
-            self.data = response
-        }
+## Performance
+- `lazy var` — defer expensive one-time computation until first access. Not thread-safe; don't use on types touched concurrently.
+- Batch type checks: `items.compactMap { $0 as? User }` once, not `as?` per iteration inside the loop.
+- Prefer arrays of structs over arrays of classes for hot data — contiguous memory, no pointer chasing / ARC per element.
+- `reserveCapacity(n)` before a known-size append loop to avoid repeated reallocations.
+- Build strings via `map{}.joined()` or `reserveCapacity` + `append`, never `+=` in a loop (allocates each time).
+- `enumerated()` over `0..<count` + subscript when you need index+value.
 
-        // Unowned self - when self definitely outlives closure
-        NetworkManager.fetch { [unowned self] response in
-            self.data = response  // Crashes if self is deallocated
-        }
+## Collection Choice
+- `Array` — ordered, random access O(1), append amortized O(1).
+- `Set` — membership O(1), unique, unordered. Use when doing repeated `contains`.
+- `Dictionary` — key→value O(1) lookup.
+- `ContiguousArray<T>` — for perf-critical numeric/struct data; avoids bridging overhead of `Array` with class/`@objc` elements.
 
-        // Capturing specific values
-        let identifier = UUID()
-        NetworkManager.fetch { [identifier] response in
-            print("Request \(identifier) completed")
-        }
-    }
-}
-```
+## Profiling & Memory Pressure
+- `os_signpost(.begin/.end, ...)` with an `OSLog` — mark intervals for Instruments Time Profiler / Points of Interest.
+- `autoreleasepool { }` around each iteration of a memory-heavy loop (esp. Foundation/`@objc` temporaries) to release per-iteration instead of at loop end.
+- On iOS, observe `UIApplication.didReceiveMemoryWarningNotification` to flush caches; remove the observer in `deinit`.
+- Directive: always measure with Instruments (Allocations, Leaks, Time Profiler) before optimizing.
 
-## Value Semantics
-
-```swift
-// Structs provide automatic copy-on-write for collections
-struct User {
-    var name: String
-    var friends: [String]  // Copy-on-write
-}
-
-var user1 = User(name: "Alice", friends: ["Bob"])
-var user2 = user1  // Shallow copy
-user2.friends.append("Charlie")  // Now triggers deep copy
-
-print(user1.friends)  // ["Bob"]
-print(user2.friends)  // ["Bob", "Charlie"]
-
-// Custom copy-on-write
-final class Storage<T> {
-    var value: T
-    init(_ value: T) { self.value = value }
-}
-
-struct MyArray<Element> {
-    private var storage: Storage<[Element]>
-
-    init(_ elements: [Element] = []) {
-        storage = Storage(elements)
-    }
-
-    var value: [Element] {
-        get { storage.value }
-        set {
-            if !isKnownUniquelyReferenced(&storage) {
-                storage = Storage(newValue)
-            } else {
-                storage.value = newValue
-            }
-        }
-    }
-
-    mutating func append(_ element: Element) {
-        if !isKnownUniquelyReferenced(&storage) {
-            storage = Storage(storage.value)
-        }
-        storage.value.append(element)
-    }
-}
-```
-
-## Performance Optimization
-
-```swift
-// Use lazy properties for expensive computations
-class Report {
-    let data: [DataPoint]
-
-    lazy var summary: String = {
-        // Expensive computation only when accessed
-        data.map { $0.description }.joined(separator: "\n")
-    }()
-
-    init(data: [DataPoint]) {
-        self.data = data
-    }
-}
-
-// Avoid repeated type casting
-// Bad
-for item in items {
-    if let user = item as? User {
-        processUser(user)
-    }
-}
-
-// Good
-let users = items.compactMap { $0 as? User }
-for user in users {
-    processUser(user)
-}
-
-// Use contiguous storage
-// Slower - pointer indirection for each element
-let arrayOfClasses: [MyClass] = [MyClass(), MyClass()]
-
-// Faster - contiguous memory
-let arrayOfStructs: [MyStruct] = [MyStruct(), MyStruct()]
-
-// Avoid string concatenation in loops
-// Bad
-var result = ""
-for item in items {
-    result += item.description  // Allocates new string each time
-}
-
-// Good
-let result = items.map { $0.description }.joined()
-
-// Or
-var result = ""
-result.reserveCapacity(estimatedSize)
-for item in items {
-    result.append(item.description)
-}
-```
-
-## Collection Performance
-
-```swift
-// Choose the right collection type
-// Array - ordered, random access O(1), append O(1) amortized
-let ordered: [Int] = [1, 2, 3]
-
-// Set - unique elements, contains O(1), no order
-let unique: Set<Int> = [1, 2, 3]
-
-// Dictionary - key-value pairs, lookup O(1)
-let mapping: [String: Int] = ["a": 1, "b": 2]
-
-// Use ContiguousArray for performance-critical code
-let contiguous = ContiguousArray<MyStruct>(repeating: MyStruct(), count: 1000)
-
-// Reserve capacity for known sizes
-var numbers: [Int] = []
-numbers.reserveCapacity(1000)
-for i in 0..<1000 {
-    numbers.append(i)
-}
-
-// Use enumerated() instead of indices
-// Bad
-for i in 0..<array.count {
-    process(index: i, value: array[i])
-}
-
-// Good
-for (index, value) in array.enumerated() {
-    process(index: index, value: value)
-}
-```
-
-## Memory Profiling with Instruments
-
-```swift
-// Add markers for profiling
-import os.signpost
-
-let log = OSLog(subsystem: "com.example.app", category: "Performance")
-
-func processData() {
-    os_signpost(.begin, log: log, name: "Data Processing")
-    defer { os_signpost(.end, log: log, name: "Data Processing") }
-
-    // Processing code
-}
-
-// Autoreleasepool for memory-intensive loops
-func processLargeDataset() {
-    for batch in dataBatches {
-        autoreleasepool {
-            // Process batch
-            // Memory released at end of each iteration
-        }
-    }
-}
-
-// Check for memory leaks
-#if DEBUG
-extension NSObject {
-    static func trackAllocations() {
-        let count = performSelector(
-            Selector(("instancesRespond:"))
-        )
-        print("\(self): \(count) instances")
-    }
-}
-#endif
-```
-
-## Optimization Levels
-
-```swift
-// Whole Module Optimization in Package.swift
-let package = Package(
-    name: "MyApp",
-    products: [
-        .executable(name: "MyApp", targets: ["MyApp"])
-    ],
-    targets: [
-        .target(
-            name: "MyApp",
-            swiftSettings: [
-                .unsafeFlags(["-O"], .when(configuration: .release))
-            ]
-        )
-    ]
-)
-
-// Inline optimization
-@inline(__always)
-func criticalPath() {
-    // Always inlined
-}
-
-@inline(never)
-func debugHelper() {
-    // Never inlined, good for debugging
-}
-
-// Optimization attributes
-@_specialize(where T == Int)
-@_specialize(where T == String)
-func process<T>(_ value: T) {
-    // Specialized versions generated
-}
-```
-
-## Memory Warnings
-
-```swift
-class ImageCache {
-    private var cache: [String: UIImage] = [:]
-
-    init() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(clearCache),
-            name: UIApplication.didReceiveMemoryWarningNotification,
-            object: nil
-        )
-    }
-
-    @objc private func clearCache() {
-        cache.removeAll()
-    }
-
-    deinit {
-        NotificationCenter.default.removeObserver(self)
-    }
-}
-```
+## Optimization Attributes & Flags
+- `-O` — release optimization (whole-module in release builds). Set per-target `swiftSettings` `.unsafeFlags(["-O"], .when(configuration: .release))` in Package.swift only if overriding defaults.
+- `@inlinable` — expose a function body across module boundaries for cross-module inlining (public API perf); locks the impl into your ABI.
+- `@inline(__always)` — force inline a tiny hot function. `@inline(never)` — keep out of inlining (clearer stack traces / debugging).
+- `@_specialize(where T == Int)` — underscore/experimental; generate a monomorphized version of a generic. Use only if profiling proves generic dispatch is the bottleneck.
 
 ## Best Practices
-
-- Use value types (structs) by default
-- Use weak references for delegates
-- Use unowned when lifetime is guaranteed
-- Always use capture lists in closures that reference self
-- Profile before optimizing (use Instruments)
-- Reserve collection capacity when size is known
-- Use lazy properties for expensive computations
-- Implement copy-on-write for custom types with reference storage
-- Handle memory warnings in iOS apps
-- Use autoreleasepool for memory-intensive loops
-- Choose appropriate collection types
-- Avoid premature optimization - measure first
+- Value types by default; `weak` for delegates; `unowned` only when lifetime guaranteed.
+- Capture list on any escaping closure referencing `self`.
+- Measure before optimizing; reserve capacity when size known.
+- Implement CoW only for large value types with reference-typed storage.
