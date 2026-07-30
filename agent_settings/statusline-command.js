@@ -143,13 +143,13 @@ out += paint(32, displayCwd);
 out += gitInfo;
 out += "\n";
 
-// Line 2: [model] ⚡effort $cost tokens rate-limits
+// Line 2: [model] 🔥effort $cost tokens rate-limits
 out += " " + paint(51, `[${model}]`);
 
 if (effort) {
     const effortColors = { low: 244, medium: 78, high: 226, xhigh: 208, max: 196 };
     const c = effortColors[effort] || 255;
-    out += " " + paint(c, `⚡${effort}`);
+    out += " " + paint(c, `🔥${effort}`);
 }
 
 out += " " + paint(226, `$${cost}`);

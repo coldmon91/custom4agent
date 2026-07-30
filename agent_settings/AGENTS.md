@@ -11,6 +11,8 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Use "-" for lists
 - Check today's date, then web-search/context7 (mcp) for latest versions
 - Line break at sentence end for readability
+- Write in noun phrases by default
+- Mark TODOs done after finishing (`- [ ]` -> `- [x]`)
 
 ## CLI
 - `fd` (fd-find) over `find`; `rg` (ripgrep) over `grep`
@@ -27,7 +29,6 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Comments in English; explain only core logic (no diff/change notes)
 - Code principles: clean/meaningful naming, optimal time & space, thorough error handling, brief rationale after writing, secure coding
 - Reuse common behavior via functions/methods/modules
-- Mark TODOs done after finishing (`- [ ]` -> `- [x]`)
 - State the next tasks when work remains
 - Use sub-agents in parallel for independent subtasks. Do not spawn them for simple or sequentially dependent work.
 
@@ -35,7 +36,6 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Braces on all if statements; modern C++ (17+); RAII where possible
 
 ### Rust
-- Latest edition (2024+)
 - No `unwrap`/`expect` in prod (use Result/Option); OK in tests when intent is clear
 - Avoid `unsafe` unless necessary; prefer safe constructs
 - Run `cargo fmt`; follow rustfmt.toml; don't hand-format against it

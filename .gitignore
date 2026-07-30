@@ -5,7 +5,7 @@ sessions/
 *.7z
 agent_settings/skills/my-remote/
 
-.system/
+.system
 # OS
 .DS_Store
 
@@ -16,3 +16,4 @@ pi-agent/recent-models.json
 
 # etc
 agent_settings/skills/my-*
+agent_settings/skills/.system
