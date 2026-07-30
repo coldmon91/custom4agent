@@ -13,15 +13,24 @@ Run `get_models.py` (in this skill's parent directory) once per invocation. Reso
 against this `SKILL.md`'s absolute location and run it with the absolute path:
 
 ```bash
-python3 "<skill dir>/../get_models.py"
+python3 "<skill dir>/../get_models.py" --profile review
 ```
 
-Output is one line: `<LATEST_SOL_MODEL>\t<LATEST_TERRA_MODEL>\t<LATEST_LUNA_MODEL>`. Capture the
-three tab-separated slugs as
-**plain strings** and substitute the literal text into every `codex` command (env vars do not
-survive across Bash calls).
+It prints the resolved tier table as `key=value` lines, three per tier:
 
-If any field is empty, abort and report it. Fallback slug reference:
+```
+tier<N>_model=<slug>
+tier<N>_effort=<level>
+tier<N>_supported_efforts=<comma-separated levels>
+```
+
+Capture these as **plain strings** and substitute the literal text into every `codex` command
+(env vars do not survive across Bash calls). Never pass an effort that is absent from that tier's
+`supported_efforts`.
+
+On failure the script exits non-zero with an `error:` line on stderr; abort and report that line
+verbatim. A `warning:` line means a role was resolved by fallback because the model lineup
+changed — the table is still usable, but say so in your announcement. Fallback slug reference:
 `https://developers.openai.com/codex/models`. Do not read model env vars or hardcode slugs.
 
 ## Arguments
@@ -29,18 +38,16 @@ If any field is empty, abort and report it. Fallback slug reference:
 `$ARGUMENTS` format: `[options] "<prompt>"`
 
 - `-m <model>`: Model. If omitted, auto-select by tier.
-- `-c model_reasoning_effort=<level>`: Reasoning level. Choices: `medium`, `high`, `xhigh`.
+- `-c model_reasoning_effort=<level>`: Reasoning level. Must appear in the chosen tier's
+  `tier<N>_supported_efforts`.
 
 User-specified values always take precedence.
 
 ## Tier Selection
 
 Pick dynamically based on task complexity. When uncertain, step up one tier.
-
-- Tier 1: `<LATEST_LUNA_MODEL>` / `medium`
-- Tier 2: `<LATEST_TERRA_MODEL>` / `medium` or `high`
-- Tier 3: `<LATEST_SOL_MODEL>` / `high`
-- Tier 4: `<LATEST_SOL_MODEL>` / `xhigh`
+Take each tier's model and effort from the resolved `tier<N>_model` and `tier<N>_effort` values.
+Tier 2 may be raised to `high` for multi-turn analysis when `tier2_supported_efforts` lists it.
 
 Use Tier 1 for symbol lookup, path checks, and short Q&A.
 Use Tier 2 for single-file review, moderate refactoring suggestions, or multi-turn analysis.
@@ -95,7 +102,7 @@ Always include `[제약]`.
 
 ## What To Do
 
-1. Resolve the three model slugs with the `get_models.py` script above and remember them as plain strings.
+1. Resolve the tier table with the `get_models.py` command above and remember the values as plain strings.
 2. Parse `$ARGUMENTS` for `-m`, `-c model_reasoning_effort=`, and the user request.
 3. Classify the tier and fill only unspecified options.
 4. Announce the resolved choice in one line, including the literal model slug.
