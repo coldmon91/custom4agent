@@ -24,7 +24,7 @@ ln -s ~/Documents/rsupport/custom_agent-skills/agent_settings/scripts/skill_usag
       ~/.claude/scripts/skill_usage_stats.py
 ```
 
-Standard library only — no virtualenv, no dependencies. A full scan of ~570 transcript
+Standard library only — no virtualenv, no dependencies. A full scan of ~580 transcript
 files takes well under a second, so no timeout guard is needed beyond the usual one.
 
 ## Options
@@ -58,12 +58,19 @@ With no arguments, run the bare command and report the table plus the summary li
 ## Reporting
 
 Show the table as-is (it is pre-aligned) and keep the trailing summary line: it carries
-the invocation total, `used/installed` counts, unused count, and scan span.
+the invocation total, `used/installed` counts, unused count, logged-but-not-installed
+count, session count, scan span, and number of files scanned.
+
+Columns: `skill`, `count`, `share`, `sessions`, `projects`, `origin`, `first`, `last`,
+`bar`. `origin` is the inventory source — `user` for this repository's skills,
+`superpowers` / `document-skills` / `supermemory` and other plugin names, or
+`not installed`.
 
 Two caveats worth surfacing when they matter:
 
 - `origin = not installed` means the skill appears in the logs but not on disk — a
-  renamed or removed skill, a project-local plugin, or a harness built-in.
+  renamed or removed skill (e.g. `remote-access`, `program_analysis_skill`), a
+  project-local plugin, or a harness built-in.
 - Harness built-in skills (`review`, `run`, `artifact-design`, `claude-in-chrome`, …)
   have no `SKILL.md` on disk, so they never appear as count-0 rows. The `--json`
   output lists these under `orphan_skills`.

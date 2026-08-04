@@ -13,6 +13,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Line break at sentence end for readability
 - Write in noun phrases by default
 - Mark TODOs done after finishing (`- [ ]` -> `- [x]`)
+- If user's request is ambiguous, ask for clarification
 
 ## CLI
 - `fd` (fd-find) over `find`; `rg` (ripgrep) over `grep`
@@ -46,3 +47,33 @@ tab_spaces = 4
 newline_style = "Unix"
 use_small_heuristics = "Default"
 ```
+
+## Superpowers — Subagent Model Selection
+
+Replaces the `## Model Selection` section of `superpowers:subagent-driven-development`; quality-first, overrides skill defaults.
+
+### Code-generating subagents
+Rate implementation difficulty before dispatch (Level 1 ~ 5; 1 = lowest).
+
+- Level 1 ~ 2 → `sonnet`
+- Level 3 ~ 4 → `opus`
+- Level 5 → `fable` (fall back to `opus` if unavailable)
+
+Difficulty criteria:
+- L1: single file; full code in the plan; transcription + tests
+- L2: 1 ~ 2 files; complete spec; follows existing patterns
+- L3: multi-file integration; requires grasp of existing patterns
+- L4: design judgment; broad codebase understanding; non-obvious debugging
+- L5: architecture decisions; subtle concurrency/perf/security correctness
+
+State the assigned Level + one-line rationale in the dispatch prompt.
+
+### Review & fix-loop subagents
+- Small/mechanical diff review → `sonnet`
+- Complex/high-risk diff review → `opus`
+- Final whole-branch review → `sonnet`
+- Fix-loop rounds 4 ~ 5 → `sonnet`
+
+### Common
+- Always specify the model; omission inherits the session model and defeats these rules
+- No `haiku` for cost savings (quality-first)
