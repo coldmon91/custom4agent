@@ -14,6 +14,8 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Write in noun phrases by default
 - Mark TODOs done after finishing (`- [ ]` -> `- [x]`)
 - If user's request is ambiguous, ask for clarification
+- When you give advice or make a recommendation, add a simple reason
+- Keep comments concise, core points only
 
 ## CLI
 - `fd` (fd-find) over `find`; `rg` (ripgrep) over `grep`
@@ -47,10 +49,6 @@ tab_spaces = 4
 newline_style = "Unix"
 use_small_heuristics = "Default"
 ```
-
-## Superpowers — Subagent Model Selection
-
-Replaces the `## Model Selection` section of `superpowers:subagent-driven-development`; quality-first, overrides skill defaults.
 
 ### Code-generating subagents
 Rate implementation difficulty before dispatch (Level 1 ~ 5; 1 = lowest).

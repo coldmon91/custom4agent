@@ -16,16 +16,16 @@ const MAX_VISIBLE_MODELS = 10;
 const MAX_RECENT_MODELS = 5;
 type ThinkingLevel = ModelThinkingLevel;
 
-type RecentModelStore = {
-  version: 1;
-  items: Array<{
-    provider: string;
-    modelId: string;
-    lastUsedAt: string;
-  }>;
+type RecentModelEntry = {
+  provider: string;
+  modelId: string;
+  lastUsedAt: string;
 };
 
-const EMPTY_RECENT_MODEL_STORE: RecentModelStore = { version: 1, items: [] };
+type RecentModelStore = {
+  version: 1;
+  items: RecentModelEntry[];
+};
 
 // Shared resource: ~/.pi/agent/recent-models.json
 // Serialize writes inside this process to avoid concurrent overwrite races.
@@ -35,50 +35,47 @@ type ModelItem = {
   provider: string;
   modelId: string;
   model: Model<Api>;
-  isRecent?: boolean;
+  isRecent: boolean;
 };
+
+function getModelKey(provider: string, modelId: string): string {
+  return `${provider}/${modelId}`;
+}
 
 function formatModelLabel(model: Model<Api>): string {
   const reasoning = model.reasoning ? "reasoning" : "no-reasoning";
   return `${model.provider}/${model.id} — ${model.name} [${reasoning}]`;
 }
 
-function effectiveThinkingFor(model: Model<Api>, requested: ThinkingLevel): ThinkingLevel {
-  return clampThinkingLevel(model, requested);
-}
-
 function getRecentModelsFilePath(): string {
   return join(getAgentDir(), "recent-models.json");
 }
 
-function getModelKey(provider: string, modelId: string): string {
-  return `${provider}/${modelId}`;
+function readString(source: object, key: string): string | undefined {
+  const value = (source as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
 }
 
 function normalizeRecentModelStore(data: unknown): RecentModelStore {
-  const rawItems = Array.isArray(data)
+  const rawItems: unknown[] = Array.isArray(data)
     ? data
-    : data && typeof data === "object" && Array.isArray((data as { items?: unknown[] }).items)
+    : Array.isArray((data as { items?: unknown } | null)?.items)
       ? (data as { items: unknown[] }).items
       : [];
 
-  const items: RecentModelStore["items"] = [];
+  const items: RecentModelEntry[] = [];
   const seen = new Set<string>();
 
   for (const item of rawItems) {
     if (!item || typeof item !== "object") continue;
-    const provider = typeof (item as { provider?: unknown }).provider === "string" ? (item as { provider: string }).provider : "";
-    const modelId = typeof (item as { modelId?: unknown }).modelId === "string" ? (item as { modelId: string }).modelId : "";
-    const lastUsedAt =
-      typeof (item as { lastUsedAt?: unknown }).lastUsedAt === "string"
-        ? (item as { lastUsedAt: string }).lastUsedAt
-        : new Date(0).toISOString();
+    const provider = readString(item, "provider");
+    const modelId = readString(item, "modelId");
     if (!provider || !modelId) continue;
 
     const key = getModelKey(provider, modelId);
     if (seen.has(key)) continue;
     seen.add(key);
-    items.push({ provider, modelId, lastUsedAt });
+    items.push({ provider, modelId, lastUsedAt: readString(item, "lastUsedAt") ?? new Date(0).toISOString() });
     if (items.length >= MAX_RECENT_MODELS) break;
   }
 
@@ -87,10 +84,9 @@ function normalizeRecentModelStore(data: unknown): RecentModelStore {
 
 async function loadRecentModelStore(): Promise<RecentModelStore> {
   try {
-    const content = await readFile(getRecentModelsFilePath(), "utf8");
-    return normalizeRecentModelStore(JSON.parse(content));
+    return normalizeRecentModelStore(JSON.parse(await readFile(getRecentModelsFilePath(), "utf8")));
   } catch {
-    return EMPTY_RECENT_MODEL_STORE;
+    return { version: 1, items: [] };
   }
 }
 
@@ -103,12 +99,14 @@ async function saveRecentModelStore(store: RecentModelStore): Promise<void> {
 }
 
 async function recordRecentModel(provider: string, modelId: string): Promise<void> {
+  const key = getModelKey(provider, modelId);
+
   recentModelsWriteQueue = recentModelsWriteQueue
     .then(async () => {
       const store = await loadRecentModelStore();
-      const items: RecentModelStore["items"] = [
+      const items = [
         { provider, modelId, lastUsedAt: new Date().toISOString() },
-        ...store.items.filter((item) => getModelKey(item.provider, item.modelId) !== getModelKey(provider, modelId)),
+        ...store.items.filter((item) => getModelKey(item.provider, item.modelId) !== key),
       ].slice(0, MAX_RECENT_MODELS);
       await saveRecentModelStore({ version: 1, items });
     })
@@ -120,61 +118,41 @@ async function recordRecentModel(provider: string, modelId: string): Promise<voi
 }
 
 async function getRecentModelKeys(ctx: ExtensionContext): Promise<string[]> {
-  const keys: string[] = [];
-  const seen = new Set<string>();
-
-  if (ctx.model) {
-    const currentKey = getModelKey(ctx.model.provider, ctx.model.id);
-    keys.push(currentKey);
-    seen.add(currentKey);
-  }
-
   const store = await loadRecentModelStore();
-  for (const item of store.items) {
-    const key = getModelKey(item.provider, item.modelId);
-    if (seen.has(key)) continue;
-    keys.push(key);
-    seen.add(key);
-    if (keys.length >= MAX_RECENT_MODELS) break;
-  }
+  const keys = [
+    ...(ctx.model ? [getModelKey(ctx.model.provider, ctx.model.id)] : []),
+    ...store.items.map((item) => getModelKey(item.provider, item.modelId)),
+  ];
 
-  return keys.slice(0, MAX_RECENT_MODELS);
+  return [...new Set(keys)].slice(0, MAX_RECENT_MODELS);
 }
 
 async function getSelectableModels(ctx: ExtensionContext): Promise<ModelItem[]> {
   const allModels = ctx.modelRegistry
     .getAll()
     .filter((model) => ctx.modelRegistry.hasConfiguredAuth(model))
-    .sort((a, b) => {
-      const providerCmp = a.provider.localeCompare(b.provider);
-      if (providerCmp !== 0) return providerCmp;
-      return a.id.localeCompare(b.id);
-    });
+    .sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
 
-  const byKey = new Map(
-    allModels.map((model) => [getModelKey(model.provider, model.id), model] as const),
-  );
+  const toItem = (model: Model<Api>, isRecent: boolean): ModelItem => ({
+    provider: model.provider,
+    modelId: model.id,
+    model,
+    isRecent,
+  });
+
+  const byKey = new Map(allModels.map((model) => [getModelKey(model.provider, model.id), model] as const));
   const recentKeys = await getRecentModelKeys(ctx);
-  const recentModels: ModelItem[] = recentKeys
-    .map((key) => byKey.get(key))
-    .filter((model): model is Model<Api> => Boolean(model))
-    .map((model) => ({
-      provider: model.provider,
-      modelId: model.id,
-      model,
-      isRecent: true,
-    }));
-
   const recentSet = new Set(recentKeys);
-  const remainingModels: ModelItem[] = allModels
-    .filter((model) => !recentSet.has(getModelKey(model.provider, model.id)))
-    .map((model) => ({
-      provider: model.provider,
-      modelId: model.id,
-      model,
-    }));
 
-  return [...recentModels, ...remainingModels];
+  return [
+    ...recentKeys
+      .map((key) => byKey.get(key))
+      .filter((model): model is Model<Api> => Boolean(model))
+      .map((model) => toItem(model, true)),
+    ...allModels
+      .filter((model) => !recentSet.has(getModelKey(model.provider, model.id)))
+      .map((model) => toItem(model, false)),
+  ];
 }
 
 function normalizeThinkingLevel(level: string): ThinkingLevel {
@@ -199,8 +177,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
       }
 
       const currentIndex = supportedLevels.indexOf(current);
-      const requested = supportedLevels[(currentIndex + 1) % supportedLevels.length];
-      pi.setThinkingLevel(requested);
+      pi.setThinkingLevel(supportedLevels[(currentIndex + 1) % supportedLevels.length]);
       ctx.ui.notify(`Effort ${rawCurrent} → ${pi.getThinkingLevel()}`, "info");
     },
   });
@@ -215,19 +192,18 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
         return;
       }
 
-      const currentModelKey = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "";
+      const currentModelKey = ctx.model ? getModelKey(ctx.model.provider, ctx.model.id) : "";
       const initialIndex = Math.max(
         0,
-        models.findIndex((m) => `${m.provider}/${m.modelId}` === currentModelKey),
+        models.findIndex((item) => getModelKey(item.provider, item.modelId) === currentModelKey),
       );
 
       const result = await ctx.ui.custom<{ model: ModelItem; thinking: ThinkingLevel } | null>(
         (tui, theme, _kb, done) => {
-          let modelIndex = initialIndex >= 0 ? initialIndex : 0;
-          let thinkingIndex = THINKING_LEVELS.indexOf(normalizeThinkingLevel(pi.getThinkingLevel()));
-          if (thinkingIndex < 0) thinkingIndex = 0;
+          let modelIndex = initialIndex;
+          let thinkingIndex = Math.max(0, THINKING_LEVELS.indexOf(normalizeThinkingLevel(pi.getThinkingLevel())));
           let query = "";
-          let scrollOffset = Math.max(0, initialIndex);
+          let scrollOffset = initialIndex;
           let cachedLines: string[] | undefined;
 
           function refresh() {
@@ -235,27 +211,23 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             tui.requestRender();
           }
 
-          function getVisibleModels(): ModelItem[] {
-            const normalized = query.trim().toLowerCase();
-            if (!normalized) return models;
+          function resetSelection() {
+            modelIndex = 0;
+            scrollOffset = 0;
+            refresh();
+          }
 
-            const tokens = normalized.split(/\s+/).filter(Boolean);
+          function getVisibleModels(): ModelItem[] {
+            const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+            if (tokens.length === 0) return models;
+
             return models.filter((item) => {
               const haystack = `${item.provider} ${item.modelId} ${item.model.name}`.toLowerCase();
               return tokens.every((token) => haystack.includes(token));
             });
           }
 
-          function ensureModelViewport(visibleModels: ModelItem[]) {
-            const maxOffset = Math.max(0, visibleModels.length - MAX_VISIBLE_MODELS);
-            if (modelIndex < scrollOffset) {
-              scrollOffset = modelIndex;
-            } else if (modelIndex >= scrollOffset + MAX_VISIBLE_MODELS) {
-              scrollOffset = modelIndex - MAX_VISIBLE_MODELS + 1;
-            }
-            scrollOffset = Math.min(Math.max(0, scrollOffset), maxOffset);
-          }
-
+          // Keeps the cursor inside the list and scrolls the viewport to follow it.
           function clampModelIndex() {
             const visibleModels = getVisibleModels();
             if (visibleModels.length === 0) {
@@ -263,13 +235,15 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               scrollOffset = 0;
               return;
             }
-            modelIndex = Math.min(Math.max(0, modelIndex), visibleModels.length - 1);
-            ensureModelViewport(visibleModels);
-          }
 
-          function getPrintableInput(data: string): string | undefined {
-            if (data.length === 1 && data >= " " && data !== "\x7f") return data;
-            return undefined;
+            modelIndex = Math.min(Math.max(0, modelIndex), visibleModels.length - 1);
+            if (modelIndex < scrollOffset) {
+              scrollOffset = modelIndex;
+            } else if (modelIndex >= scrollOffset + MAX_VISIBLE_MODELS) {
+              scrollOffset = modelIndex - MAX_VISIBLE_MODELS + 1;
+            }
+            const maxOffset = Math.max(0, visibleModels.length - MAX_VISIBLE_MODELS);
+            scrollOffset = Math.min(Math.max(0, scrollOffset), maxOffset);
           }
 
           function handleInput(data: string) {
@@ -287,43 +261,39 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             }
             if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) {
               const selectedModel = visibleModels[modelIndex]?.model;
-              if (selectedModel?.reasoning) {
-                const supportedLevels = getSupportedThinkingLevels(selectedModel);
-                if (supportedLevels.length === 0) return;
+              if (!selectedModel?.reasoning) return;
 
-                const requested = THINKING_LEVELS[thinkingIndex];
-                const effective = effectiveThinkingFor(selectedModel, requested);
-                const currentIndex = supportedLevels.indexOf(effective);
-                const direction = matchesKey(data, Key.left) ? -1 : 1;
-                const nextIndex = Math.min(
-                  supportedLevels.length - 1,
-                  Math.max(0, currentIndex + direction),
-                );
-                const nextLevel = supportedLevels[nextIndex];
-                const globalIndex = THINKING_LEVELS.indexOf(nextLevel);
-                if (globalIndex >= 0 && globalIndex !== thinkingIndex) {
-                  thinkingIndex = globalIndex;
-                  refresh();
-                }
+              const supportedLevels = getSupportedThinkingLevels(selectedModel);
+              if (supportedLevels.length === 0) return;
+
+              // Step within the model's own levels, then map back onto the global scale.
+              const direction = matchesKey(data, Key.left) ? -1 : 1;
+              const effective = clampThinkingLevel(selectedModel, THINKING_LEVELS[thinkingIndex]);
+              const nextIndex = Math.min(
+                supportedLevels.length - 1,
+                Math.max(0, supportedLevels.indexOf(effective) + direction),
+              );
+              const globalIndex = THINKING_LEVELS.indexOf(supportedLevels[nextIndex]);
+              if (globalIndex >= 0 && globalIndex !== thinkingIndex) {
+                thinkingIndex = globalIndex;
+                refresh();
               }
               return;
             }
             if (matchesKey(data, Key.backspace) || matchesKey(data, Key.delete)) {
               if (query.length > 0) {
                 query = query.slice(0, -1);
-                modelIndex = 0;
-                scrollOffset = 0;
-                refresh();
+                resetSelection();
               }
               return;
             }
             if (matchesKey(data, Key.enter)) {
               clampModelIndex();
-              const selectedModel = getVisibleModels()[modelIndex];
-              if (selectedModel) {
+              const selected = getVisibleModels()[modelIndex];
+              if (selected) {
                 done({
-                  model: selectedModel,
-                  thinking: effectiveThinkingFor(selectedModel.model, THINKING_LEVELS[thinkingIndex]),
+                  model: selected,
+                  thinking: clampThinkingLevel(selected.model, THINKING_LEVELS[thinkingIndex]),
                 });
               }
               return;
@@ -331,22 +301,26 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             if (matchesKey(data, Key.escape)) {
               if (query.length > 0) {
                 query = "";
-                modelIndex = 0;
-                scrollOffset = 0;
-                refresh();
+                resetSelection();
                 return;
               }
               done(null);
               return;
             }
 
-            const printable = getPrintableInput(data);
-            if (printable) {
-              query += printable;
-              modelIndex = 0;
-              scrollOffset = 0;
-              refresh();
+            const isPrintable = data.length === 1 && data >= " " && data !== "\x7f";
+            if (isPrintable) {
+              query += data;
+              resetSelection();
             }
+          }
+
+          function renderEffortSuffix(model: Model<Api>, requested: ThinkingLevel, effective: ThinkingLevel): string {
+            if (!model.reasoning) return theme.fg("dim", " · effort unavailable");
+
+            const label = `${theme.fg("dim", " · effort ")}${theme.fg(thinkingColor(requested), requested)}`;
+            if (effective === requested) return label;
+            return `${label}${theme.fg("dim", " → ")}${theme.fg(thinkingColor(effective), effective)}`;
           }
 
           function render(width: number): string[] {
@@ -358,9 +332,9 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             clampModelIndex();
             const selectedModel = visibleModels[modelIndex]?.model;
             const requestedThinking = THINKING_LEVELS[thinkingIndex];
-            const effectiveThinking = selectedModel ? effectiveThinkingFor(selectedModel, requestedThinking) : requestedThinking;
-            const requestedEffortText = theme.fg(thinkingColor(requestedThinking), requestedThinking);
-            const effectiveEffortText = theme.fg(thinkingColor(effectiveThinking), effectiveThinking);
+            const effectiveThinking = selectedModel
+              ? clampThinkingLevel(selectedModel, requestedThinking)
+              : requestedThinking;
 
             const title = `Model selector${currentModelKey ? ` · current ${currentModelKey}` : ""}`;
             lines.push(theme.fg("accent", "─".repeat(renderWidth)));
@@ -379,33 +353,25 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               lines.push("");
             }
 
-            let insertedRecentHeader = false;
-            let insertedAllHeader = false;
+            // Recent entries always precede the rest, so the group flips at most once per window.
+            let groupIsRecent: boolean | undefined;
 
             for (let i = windowStart; i < windowEnd; i++) {
               const item = visibleModels[i];
-              if (item.isRecent && !insertedRecentHeader) {
-                lines.push(theme.fg("muted", "Recent models"));
-                insertedRecentHeader = true;
-              }
-              if (!item.isRecent && !insertedAllHeader) {
-                if (insertedRecentHeader) lines.push("");
-                lines.push(theme.fg("muted", "All models"));
-                insertedAllHeader = true;
+              if (item.isRecent !== groupIsRecent) {
+                if (groupIsRecent) lines.push("");
+                lines.push(theme.fg("muted", item.isRecent ? "Recent models" : "All models"));
+                groupIsRecent = item.isRecent;
               }
 
               const selected = i === modelIndex;
-              const isCurrent = `${item.provider}/${item.modelId}` === currentModelKey;
+              const isCurrent = getModelKey(item.provider, item.modelId) === currentModelKey;
               const prefix = selected ? theme.fg("accent", "> ") : "  ";
               const baseLabel = `${isCurrent ? "● " : "  "}${formatModelLabel(item.model)}`;
-              const effortSuffix = selected
-                ? item.model.reasoning
-                  ? effectiveThinking === requestedThinking
-                    ? `${theme.fg("dim", " · effort ")}${requestedEffortText}`
-                    : `${theme.fg("dim", " · effort ")}${requestedEffortText}${theme.fg("dim", " → ")}${effectiveEffortText}`
-                  : theme.fg("dim", " · effort unavailable")
-                : "";
               const labelColor = selected ? "accent" : isCurrent ? "success" : "text";
+              const effortSuffix = selected
+                ? renderEffortSuffix(item.model, requestedThinking, effectiveThinking)
+                : "";
               const wrapped = wrapTextWithAnsi(
                 `${theme.fg(labelColor, baseLabel)}${effortSuffix}`,
                 Math.max(1, renderWidth - visibleWidth(prefix)),
@@ -439,18 +405,20 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
 
       if (!result) return;
 
-      const modelChanged = !ctx.model || ctx.model.provider !== result.model.provider || ctx.model.id !== result.model.modelId;
+      const { provider, modelId, model } = result.model;
+      const selectedKey = getModelKey(provider, modelId);
+      const modelChanged = !ctx.model || ctx.model.provider !== provider || ctx.model.id !== modelId;
+
       if (modelChanged) {
-        const ok = await pi.setModel(result.model.model);
+        const ok = await pi.setModel(model);
         if (!ok) {
-          ctx.ui.notify(`No API key for ${result.model.provider}/${result.model.modelId}`, "error");
+          ctx.ui.notify(`No API key for ${selectedKey}`, "error");
           return;
         }
       }
 
       pi.setThinkingLevel(result.thinking);
-      const effectiveThinking = pi.getThinkingLevel();
-      ctx.ui.notify(`Switched to ${result.model.provider}/${result.model.modelId} / effort ${effectiveThinking}`, "info");
+      ctx.ui.notify(`Switched to ${selectedKey} / effort ${pi.getThinkingLevel()}`, "info");
     },
   });
 }
