@@ -1,5 +1,6 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { hostname, userInfo } from "node:os";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { thinkingColor } from "./thinking-colors";
 
@@ -11,6 +12,14 @@ function formatCwd(cwd: string): string {
 
 function fmt(n: number): string {
   return n < 1000 ? `${n}` : `${(n / 1000).toFixed(1)}k`;
+}
+
+function getSystemIdentity(): string {
+  try {
+    return `${userInfo().username}@${hostname()}`;
+  } catch {
+    return `${process.env.USER ?? "unknown"}@${process.env.HOSTNAME ?? "unknown"}`;
+  }
 }
 
 function layoutFooterLine(left: string, right: string, width: number): string {
@@ -52,13 +61,14 @@ export default function footerModelUnderCwd(pi: ExtensionAPI) {
 
           const usage = ctx.getContextUsage();
           const context = usage?.percent != null ? `ctx ${Math.round(usage.percent)}%` : "ctx ?";
+          const identity = getSystemIdentity();
           const cwd = formatCwd(ctx.cwd);
           const branch = footerData.getGitBranch();
           const sessionName = ctx.sessionManager.getSessionName?.();
           const statuses = [...footerData.getExtensionStatuses().values()].filter(Boolean);
           const pathLineLeft = theme.fg(
             "dim",
-            `${cwd}${branch ? ` (${branch})` : ""}${sessionName ? ` · ${sessionName}` : ""}`,
+            `${identity} · ${cwd}${branch ? ` (${branch})` : ""}${sessionName ? ` · ${sessionName}` : ""}`,
           );
           const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "no-model";
           const thinking = pi.getThinkingLevel();

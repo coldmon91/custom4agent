@@ -302,10 +302,16 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
           let query = "";
           let scrollOffset = initialIndex;
           let favoriteUpdatePending = false;
+          let cachedWidth: number | undefined;
           let cachedLines: string[] | undefined;
 
-          function refresh() {
+          function clearRenderCache() {
+            cachedWidth = undefined;
             cachedLines = undefined;
+          }
+
+          function refresh() {
+            clearRenderCache();
             tui.requestRender();
           }
 
@@ -485,10 +491,13 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
           }
 
           function render(width: number): string[] {
-            if (cachedLines) return cachedLines;
+            if (cachedLines && cachedWidth === width) return cachedLines;
 
             const lines: string[] = [];
-            const renderWidth = Math.max(40, width);
+            const renderWidth = Math.max(1, width);
+            const pushWrappedLine = (line: string) => {
+              lines.push(...wrapTextWithAnsi(line, renderWidth));
+            };
             const visibleModels = getVisibleModels();
             clampModelIndex();
             const selectedModel = visibleModels[modelIndex]?.model;
@@ -499,18 +508,18 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
 
             const title = `Model selector${currentModelKey ? ` · current ${currentModelKey}` : ""}`;
             lines.push(theme.fg("accent", "─".repeat(renderWidth)));
-            lines.push(...wrapTextWithAnsi(theme.fg("text", title), renderWidth));
-            lines.push(theme.fg("muted", `Search: ${query || "(type to filter)"}`));
+            pushWrappedLine(theme.fg("text", title));
+            pushWrappedLine(theme.fg("muted", `Search: ${query || "(type to filter)"}`));
             lines.push("");
 
             if (visibleModels.length === 0) {
-              lines.push(theme.fg("warning", "No matching models"));
+              pushWrappedLine(theme.fg("warning", "No matching models"));
             }
 
             const windowStart = scrollOffset;
             const windowEnd = Math.min(visibleModels.length, windowStart + MAX_VISIBLE_MODELS);
             if (visibleModels.length > MAX_VISIBLE_MODELS) {
-              lines.push(theme.fg("muted", `Showing ${windowStart + 1}-${windowEnd} of ${visibleModels.length}`));
+              pushWrappedLine(theme.fg("muted", `Showing ${windowStart + 1}-${windowEnd} of ${visibleModels.length}`));
               lines.push("");
             }
 
@@ -527,7 +536,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
                     : itemGroup === "recent"
                       ? "Recent models"
                       : "All models";
-                lines.push(theme.fg("muted", groupLabel));
+                pushWrappedLine(theme.fg("muted", groupLabel));
                 group = itemGroup;
               }
 
@@ -540,32 +549,40 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               const effortSuffix = selected
                 ? renderEffortSuffix(item.model, requestedThinking, effectiveThinking)
                 : "";
-              const wrapped = wrapTextWithAnsi(
-                `${theme.fg(labelColor, baseLabel)}${effortSuffix}`,
-                Math.max(1, renderWidth - visibleWidth(prefix)),
-              );
-
-              for (const line of wrapped) {
-                lines.push(`${prefix}${line}`);
+              const label = `${theme.fg(labelColor, baseLabel)}${effortSuffix}`;
+              const prefixWidth = visibleWidth(prefix);
+              if (prefixWidth >= renderWidth) {
+                pushWrappedLine(`${prefix}${label}`);
+              } else {
+                const wrapped = wrapTextWithAnsi(label, renderWidth - prefixWidth);
+                for (const line of wrapped) {
+                  lines.push(`${prefix}${line}`);
+                }
               }
             }
 
             lines.push("");
             if (selectedModel && !selectedModel.reasoning) {
-              lines.push(theme.fg("warning", "* This model does not support reasoning; effort selection is disabled."));
+              pushWrappedLine(
+                theme.fg("warning", "* This model does not support reasoning; effort selection is disabled."),
+              );
             }
-            lines.push(theme.fg("dim", "Type to search • Space favorite • Backspace delete • ↑↓ model • ←→ effort • Enter apply • Esc clear/cancel"));
+            pushWrappedLine(
+              theme.fg(
+                "dim",
+                "Type to search • Space favorite • Backspace delete • ↑↓ model • ←→ effort • Enter apply • Esc clear/cancel",
+              ),
+            );
             lines.push(theme.fg("accent", "─".repeat(renderWidth)));
 
+            cachedWidth = width;
             cachedLines = lines;
             return lines;
           }
 
           return {
             render,
-            invalidate: () => {
-              cachedLines = undefined;
-            },
+            invalidate: clearRenderCache,
             handleInput,
           };
         },
