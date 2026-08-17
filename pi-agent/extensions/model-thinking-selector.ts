@@ -14,7 +14,19 @@ import { thinkingColor } from "./thinking-colors";
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const MAX_VISIBLE_MODELS = 10;
 const MAX_RECENT_MODELS = 5;
+const MAX_FAVORITE_MODELS = 5;
 type ThinkingLevel = ModelThinkingLevel;
+
+type FavoriteModelEntry = {
+  provider: string;
+  modelId: string;
+  addedAt: string;
+};
+
+type FavoriteModelStore = {
+  version: 1;
+  items: FavoriteModelEntry[];
+};
 
 type RecentModelEntry = {
   provider: string;
@@ -27,15 +39,22 @@ type RecentModelStore = {
   items: RecentModelEntry[];
 };
 
-// Shared resource: ~/.pi/agent/recent-models.json
+// Shared resources: ~/.pi/agent/favorite-models.json and recent-models.json.
 // Serialize writes inside this process to avoid concurrent overwrite races.
+let favoriteModelsWriteQueue: Promise<void> = Promise.resolve();
 let recentModelsWriteQueue: Promise<void> = Promise.resolve();
 
 type ModelItem = {
   provider: string;
   modelId: string;
   model: Model<Api>;
+  isFavorite: boolean;
   isRecent: boolean;
+};
+
+type SelectableModelData = {
+  allModels: Model<Api>[];
+  recentKeys: string[];
 };
 
 function getModelKey(provider: string, modelId: string): string {
@@ -47,6 +66,10 @@ function formatModelLabel(model: Model<Api>): string {
   return `${model.provider}/${model.id} — ${model.name} [${reasoning}]`;
 }
 
+function getFavoriteModelsFilePath(): string {
+  return join(getAgentDir(), "favorite-models.json");
+}
+
 function getRecentModelsFilePath(): string {
   return join(getAgentDir(), "recent-models.json");
 }
@@ -54,6 +77,32 @@ function getRecentModelsFilePath(): string {
 function readString(source: object, key: string): string | undefined {
   const value = (source as Record<string, unknown>)[key];
   return typeof value === "string" ? value : undefined;
+}
+
+function normalizeFavoriteModelStore(data: unknown): FavoriteModelStore {
+  const rawItems: unknown[] = Array.isArray(data)
+    ? data
+    : Array.isArray((data as { items?: unknown } | null)?.items)
+      ? (data as { items: unknown[] }).items
+      : [];
+
+  const items: FavoriteModelEntry[] = [];
+  const seen = new Set<string>();
+
+  for (const item of rawItems) {
+    if (!item || typeof item !== "object") continue;
+    const provider = readString(item, "provider");
+    const modelId = readString(item, "modelId");
+    if (!provider || !modelId) continue;
+
+    const key = getModelKey(provider, modelId);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({ provider, modelId, addedAt: readString(item, "addedAt") ?? new Date(0).toISOString() });
+    if (items.length >= MAX_FAVORITE_MODELS) break;
+  }
+
+  return { version: 1, items };
 }
 
 function normalizeRecentModelStore(data: unknown): RecentModelStore {
@@ -80,6 +129,35 @@ function normalizeRecentModelStore(data: unknown): RecentModelStore {
   }
 
   return { version: 1, items };
+}
+
+async function loadFavoriteModelStore(): Promise<FavoriteModelStore> {
+  try {
+    return normalizeFavoriteModelStore(JSON.parse(await readFile(getFavoriteModelsFilePath(), "utf8")));
+  } catch {
+    return { version: 1, items: [] };
+  }
+}
+
+async function saveFavoriteModelStore(store: FavoriteModelStore): Promise<void> {
+  const filePath = getFavoriteModelsFilePath();
+  await mkdir(getAgentDir(), { recursive: true });
+  const tempPath = `${filePath}.${process.pid}.tmp`;
+  await writeFile(tempPath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  await rename(tempPath, filePath);
+}
+
+function persistFavoriteModelStore(store: FavoriteModelStore): Promise<void> {
+  const snapshot: FavoriteModelStore = {
+    version: 1,
+    items: store.items.map((item) => ({ ...item })),
+  };
+
+  favoriteModelsWriteQueue = favoriteModelsWriteQueue
+    .catch(() => undefined)
+    .then(() => saveFavoriteModelStore(snapshot));
+
+  return favoriteModelsWriteQueue;
 }
 
 async function loadRecentModelStore(): Promise<RecentModelStore> {
@@ -127,31 +205,45 @@ async function getRecentModelKeys(ctx: ExtensionContext): Promise<string[]> {
   return [...new Set(keys)].slice(0, MAX_RECENT_MODELS);
 }
 
-async function getSelectableModels(ctx: ExtensionContext): Promise<ModelItem[]> {
+async function getSelectableModelData(ctx: ExtensionContext): Promise<SelectableModelData> {
   const allModels = ctx.modelRegistry
     .getAll()
     .filter((model) => ctx.modelRegistry.hasConfiguredAuth(model))
     .sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
 
-  const toItem = (model: Model<Api>, isRecent: boolean): ModelItem => ({
+  return { allModels, recentKeys: await getRecentModelKeys(ctx) };
+}
+
+function buildSelectableModels(data: SelectableModelData, favoriteStore: FavoriteModelStore): ModelItem[] {
+  const byKey = new Map(data.allModels.map((model) => [getModelKey(model.provider, model.id), model] as const));
+  const favoriteKeys = favoriteStore.items.map((item) => getModelKey(item.provider, item.modelId));
+  const favoriteSet = new Set(favoriteKeys);
+  const recentKeys = data.recentKeys.filter((key) => !favoriteSet.has(key));
+  const recentSet = new Set(recentKeys);
+
+  const toItem = (model: Model<Api>, isFavorite: boolean, isRecent: boolean): ModelItem => ({
     provider: model.provider,
     modelId: model.id,
     model,
+    isFavorite,
     isRecent,
   });
 
-  const byKey = new Map(allModels.map((model) => [getModelKey(model.provider, model.id), model] as const));
-  const recentKeys = await getRecentModelKeys(ctx);
-  const recentSet = new Set(recentKeys);
-
   return [
+    ...favoriteKeys
+      .map((key) => byKey.get(key))
+      .filter((model): model is Model<Api> => Boolean(model))
+      .map((model) => toItem(model, true, false)),
     ...recentKeys
       .map((key) => byKey.get(key))
       .filter((model): model is Model<Api> => Boolean(model))
-      .map((model) => toItem(model, true)),
-    ...allModels
-      .filter((model) => !recentSet.has(getModelKey(model.provider, model.id)))
-      .map((model) => toItem(model, false)),
+      .map((model) => toItem(model, false, true)),
+    ...data.allModels
+      .filter((model) => {
+        const key = getModelKey(model.provider, model.id);
+        return !favoriteSet.has(key) && !recentSet.has(key);
+      })
+      .map((model) => toItem(model, false, false)),
   ];
 }
 
@@ -185,7 +277,12 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
   pi.registerShortcut("alt+p", {
     description: "Select model and thinking level",
     handler: async (ctx) => {
-      const models = await getSelectableModels(ctx);
+      const [modelData, loadedFavoriteStore] = await Promise.all([
+        getSelectableModelData(ctx),
+        loadFavoriteModelStore(),
+      ]);
+      let favoriteStore = loadedFavoriteStore;
+      let models = buildSelectableModels(modelData, favoriteStore);
 
       if (models.length === 0) {
         ctx.ui.notify("No configured models available", "warning");
@@ -204,6 +301,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
           let thinkingIndex = Math.max(0, THINKING_LEVELS.indexOf(normalizeThinkingLevel(pi.getThinkingLevel())));
           let query = "";
           let scrollOffset = initialIndex;
+          let favoriteUpdatePending = false;
           let cachedLines: string[] | undefined;
 
           function refresh() {
@@ -246,9 +344,72 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             scrollOffset = Math.min(Math.max(0, scrollOffset), maxOffset);
           }
 
+          async function toggleFavorite(): Promise<void> {
+            if (favoriteUpdatePending) return;
+
+            const selectedModel = getVisibleModels()[modelIndex];
+            if (!selectedModel) return;
+
+            const selectedKey = getModelKey(selectedModel.provider, selectedModel.modelId);
+            const favoriteIndex = favoriteStore.items.findIndex(
+              (item) => getModelKey(item.provider, item.modelId) === selectedKey,
+            );
+
+            if (favoriteIndex < 0 && favoriteStore.items.length >= MAX_FAVORITE_MODELS) {
+              ctx.ui.notify(`You can register up to ${MAX_FAVORITE_MODELS} favorite models`, "warning");
+              return;
+            }
+
+            const previousStore = favoriteStore;
+            const nextItems =
+              favoriteIndex >= 0
+                ? favoriteStore.items.filter((_, index) => index !== favoriteIndex)
+                : [
+                    {
+                      provider: selectedModel.provider,
+                      modelId: selectedModel.modelId,
+                      addedAt: new Date().toISOString(),
+                    },
+                    ...favoriteStore.items,
+                  ];
+
+            favoriteStore = { version: 1, items: nextItems };
+            models = buildSelectableModels(modelData, favoriteStore);
+            modelIndex = Math.max(
+              0,
+              getVisibleModels().findIndex((item) => getModelKey(item.provider, item.modelId) === selectedKey),
+            );
+            scrollOffset = 0;
+            clampModelIndex();
+            refresh();
+
+            favoriteUpdatePending = true;
+            try {
+              await persistFavoriteModelStore(favoriteStore);
+            } catch (error) {
+              favoriteStore = previousStore;
+              models = buildSelectableModels(modelData, favoriteStore);
+              modelIndex = Math.max(
+                0,
+                getVisibleModels().findIndex((item) => getModelKey(item.provider, item.modelId) === selectedKey),
+              );
+              scrollOffset = 0;
+              clampModelIndex();
+              refresh();
+              const message = error instanceof Error ? error.message : String(error);
+              ctx.ui.notify(`Failed to update favorite models: ${message}`, "error");
+            } finally {
+              favoriteUpdatePending = false;
+            }
+          }
+
           function handleInput(data: string) {
             const visibleModels = getVisibleModels();
 
+            if (matchesKey(data, Key.space)) {
+              void toggleFavorite();
+              return;
+            }
             if (matchesKey(data, Key.up)) {
               modelIndex = Math.max(0, modelIndex - 1);
               refresh();
@@ -353,21 +514,28 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               lines.push("");
             }
 
-            // Recent entries always precede the rest, so the group flips at most once per window.
-            let groupIsRecent: boolean | undefined;
+            let group: "favorite" | "recent" | "all" | undefined;
 
             for (let i = windowStart; i < windowEnd; i++) {
               const item = visibleModels[i];
-              if (item.isRecent !== groupIsRecent) {
-                if (groupIsRecent) lines.push("");
-                lines.push(theme.fg("muted", item.isRecent ? "Recent models" : "All models"));
-                groupIsRecent = item.isRecent;
+              const itemGroup = item.isFavorite ? "favorite" : item.isRecent ? "recent" : "all";
+              if (itemGroup !== group) {
+                if (group) lines.push("");
+                const groupLabel =
+                  itemGroup === "favorite"
+                    ? "Favorite models"
+                    : itemGroup === "recent"
+                      ? "Recent models"
+                      : "All models";
+                lines.push(theme.fg("muted", groupLabel));
+                group = itemGroup;
               }
 
               const selected = i === modelIndex;
               const isCurrent = getModelKey(item.provider, item.modelId) === currentModelKey;
               const prefix = selected ? theme.fg("accent", "> ") : "  ";
-              const baseLabel = `${isCurrent ? "● " : "  "}${formatModelLabel(item.model)}`;
+              const favoriteMark = item.isFavorite ? "★ " : "  ";
+              const baseLabel = `${isCurrent ? "● " : "  "}${favoriteMark}${formatModelLabel(item.model)}`;
               const labelColor = selected ? "accent" : isCurrent ? "success" : "text";
               const effortSuffix = selected
                 ? renderEffortSuffix(item.model, requestedThinking, effectiveThinking)
@@ -386,7 +554,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             if (selectedModel && !selectedModel.reasoning) {
               lines.push(theme.fg("warning", "* This model does not support reasoning; effort selection is disabled."));
             }
-            lines.push(theme.fg("dim", "Type to search • Backspace delete • ↑↓ model • ←→ effort • Enter apply • Esc clear/cancel"));
+            lines.push(theme.fg("dim", "Type to search • Space favorite • Backspace delete • ↑↓ model • ←→ effort • Enter apply • Esc clear/cancel"));
             lines.push(theme.fg("accent", "─".repeat(renderWidth)));
 
             cachedLines = lines;
