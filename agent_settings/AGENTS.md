@@ -16,6 +16,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - If user's request is ambiguous, ask for clarification
 - When you give advice or make a recommendation, add a simple reason
 - Keep comments concise, core points only
+- Always check whether the user’s request is valid
 
 ## CLI
 - `fd` (fd-find) over `find`; `rg` (ripgrep) over `grep`
