@@ -19,3 +19,7 @@ pi-agent/favorite-models.json
 # etc
 agent_settings/skills/my-*
 agent_settings/skills/.system
+
+# Symlinks to machine-local skill sources
+agent_settings/skills/korean-report-doc
+agent_settings/skills/korean-report-style
