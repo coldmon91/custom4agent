@@ -9,11 +9,10 @@ more, nothing less) and is well-built (clean, tested, maintainable)
 
 ```
 Subagent:
-  subagent_type: [AGENT — REQUIRED: review-small | review-complex,
-                 per SKILL.md Agent and Model Selection]
+  subagent_type: [AGENT — REQUIRED: selected family variant of
+                 review-small | review-complex, per SKILL.md Agent and Model Selection]
   description: "Review Task N (spec + quality)"
-  model: [MODEL — REQUIRED: sonnet (review-small) | opus (review-complex);
-         an omitted model silently inherits the session's most expensive one]
+  # Do not pass model for a named definition; its frontmatter owns model and effort.
   prompt: |
     You are reviewing one task's implementation: first whether it matches its
     requirements, then whether it is well-built. This is a task-scoped gate,
@@ -193,11 +192,10 @@ Subagent:
 ```
 
 **Placeholders:**
-- `[AGENT]` — REQUIRED: `review-small` for a small or mechanical diff,
-  `review-complex` for concurrency, memory/lifetime, security, public
-  interfaces, data migration, hot paths, or many modules
-- `[MODEL]` — REQUIRED: `sonnet` with `review-small`, `opus` with
-  `review-complex`
+- `[AGENT]` — REQUIRED: Claude uses `review-small` for a small or
+  mechanical diff and `review-complex` for high-risk work; GPT uses the
+  matching `-gpt` definition. Named definitions supply the model: Claude
+  `sonnet`/`opus`; GPT `luna`/`sol` only.
 - `[BRIEF_FILE]` — REQUIRED: the task brief file (`scripts/task-brief PLAN N`
   prints the path; same file the implementer worked from)
 - `[GLOBAL_CONSTRAINTS]` — the binding requirements copied verbatim from
