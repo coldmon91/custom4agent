@@ -153,7 +153,7 @@ After saving the plan, offer execution choice:
 
 **If subagent-driven chosen:**
 - One subagent per task, with the task block and the spec path in its prompt. It sees only its own task, so the task's **Interfaces** block must carry every name and type it needs.
-- Rate each task's implementation difficulty (Level 1 ~ 5) and pick the subagent model per the project's model-selection rules. State the Level and a one-line rationale in the dispatch prompt.
+- Rate each task's implementation difficulty (Level 1 ~ 5) and dispatch the matching agent type (`impl-l1-2` / `impl-l3-4` / `impl-l5`), which owns its own model and effort. State the Level and a one-line rationale in the dispatch prompt.
 - Reasoning effort cannot be passed as a dispatch argument — it comes from the agent type's own definition (`.claude/agents/*.md` frontmatter). If a Level band has a dedicated agent type that presets both model and effort, select it via `subagent_type`; otherwise the subagent inherits the session default.
 - Review the resulting diff before dispatching the next task. Do not batch dispatches across tasks that depend on each other.
 

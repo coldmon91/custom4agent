@@ -1,6 +1,11 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
+import {
+  getAgentDir,
+  SettingsManager,
+  type ExtensionAPI,
+  type ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import {
   clampThinkingLevel,
   getSupportedThinkingLevels,
@@ -43,6 +48,8 @@ type RecentModelStore = {
 // Serialize writes inside this process to avoid concurrent overwrite races.
 let favoriteModelsWriteQueue: Promise<void> = Promise.resolve();
 let recentModelsWriteQueue: Promise<void> = Promise.resolve();
+// ~/.pi/agent/settings.json is also shared; serialize writes for the same reason.
+let globalSettingsWriteQueue: Promise<void> = Promise.resolve();
 
 type ModelItem = {
   provider: string;
@@ -195,6 +202,37 @@ async function recordRecentModel(provider: string, modelId: string): Promise<voi
   return recentModelsWriteQueue;
 }
 
+// pi only writes the startup model to settings.json when its own picker is used
+// with `persist`; the extension API's setModel() is always session-scoped. Mirror
+// the selection into global settings so the next session starts from it.
+function enqueueGlobalSettingsWrite(label: string, apply: (settings: SettingsManager) => void): Promise<void> {
+  globalSettingsWriteQueue = globalSettingsWriteQueue
+    .then(async () => {
+      // Reload per write: the running pi process holds its own instance, and
+      // SettingsManager merges only the fields it modified under a file lock.
+      const settings = SettingsManager.create(process.cwd(), getAgentDir(), { projectTrusted: false });
+      apply(settings);
+      await settings.flush();
+    })
+    .catch((error) => {
+      console.error(`Failed to persist ${label} to settings.json:`, error);
+    });
+
+  return globalSettingsWriteQueue;
+}
+
+async function persistDefaultModel(provider: string, modelId: string): Promise<void> {
+  await enqueueGlobalSettingsWrite("default model", (settings) => {
+    settings.setDefaultModelAndProvider(provider, modelId);
+  });
+}
+
+async function persistModelThinkingLevel(provider: string, modelId: string, level: ThinkingLevel): Promise<void> {
+  await enqueueGlobalSettingsWrite("model thinking level", (settings) => {
+    settings.setModelThinkingLevel(provider, modelId, level);
+  });
+}
+
 async function getRecentModelKeys(ctx: ExtensionContext): Promise<string[]> {
   const store = await loadRecentModelStore();
   const keys = [
@@ -253,7 +291,17 @@ function normalizeThinkingLevel(level: string): ThinkingLevel {
 
 export default function modelThinkingSelector(pi: ExtensionAPI) {
   pi.on("model_select", async (event) => {
-    await recordRecentModel(event.model.provider, event.model.id);
+    await Promise.all([
+      recordRecentModel(event.model.provider, event.model.id),
+      persistDefaultModel(event.model.provider, event.model.id),
+    ]);
+  });
+
+  // Fires after model_select, so the effort chosen in the selector wins over the
+  // level pi derives while switching models.
+  pi.on("thinking_level_select", async (event, ctx) => {
+    if (!ctx.model) return;
+    await persistModelThinkingLevel(ctx.model.provider, ctx.model.id, event.level);
   });
 
   pi.registerShortcut("ctrl+shift+t", {
