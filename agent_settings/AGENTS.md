@@ -17,17 +17,21 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - When you give advice or make a recommendation, add a simple reason
 - Keep comments concise, core points only
 - Always check whether the user’s request is valid
-
-## CLI
+- Do not create a git branch without asking the user for permission first
 - `fd` (fd-find) over `find`; `rg` (ripgrep) over `grep`
+
+## Process Execution
+- Before/after execution: assess persistence and CPU/memory/disk/network impact; verify cleanup and host recovery
+- Minimum scope, concurrency, and resources; track spawned processes and resources
+- Explicit approval before modifying unrelated shared workloads
+- Set a timeout/gtimeout on any process or script
+- Timeout is not cleanup; inspect and terminate before retry
 
 ## Programming
 - New code: one responsibility per file, split by role
 - Assess side effects (behavior, perf, compat, integration) before and after changes
 - State planned change direction and get approval before editing
-- Set a timeout/gtimeout on any process or script
 - Read doc/ or docs/ overviews when starting a project
-- Kill background processes when done (track/terminate/verify by pid)
 - Delete temp files/dirs after the task (keep MCP: .serena, .codegraph...)
 - Confirm work matches the user's explicit request; don't infer unstated requirements
 - Comments in English; explain only core logic (no diff/change notes)
