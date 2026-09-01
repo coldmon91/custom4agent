@@ -39,7 +39,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Reuse common behavior via functions/methods/modules
 - State the next tasks when work remains
 - Use sub-agents in parallel for independent subtasks. Do not spawn them for simple or sequentially dependent work.
-- Dispatch subagents by named definition (`impl-l1-2` / `impl-l3-4` / `impl-l5` / `review-*` / `fix-loop`); each definition owns its model and effort. Specify `model` explicitly only for unnamed dispatch (e.g. `general-purpose`).
+- Dispatch subagents by named definition. Claude uses the base definitions (`impl-l1-2` / `impl-l3-4` / `impl-l5` / `review-*` / `fix-loop`); GPT uses their `-gpt` variants. Each definition owns its model and effort. GPT definitions use only `sol` or `luna`, and every `luna` definition uses `high` effort or above. Specify `model` explicitly only for unnamed dispatches (e.g. `general-purpose`).
 
 ### C++
 - Braces on all if statements; modern C++ (17+); RAII where possible

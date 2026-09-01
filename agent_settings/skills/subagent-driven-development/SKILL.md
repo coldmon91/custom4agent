@@ -184,43 +184,63 @@ implementation.
 
 ## Agent and Model Selection
 
-Every dispatch names both an agent type and a model explicitly. An omitted
-model inherits your session's model — often the most capable and most
-expensive — which silently defeats this section.
+Named agent definitions own their model and reasoning effort. Select the
+matching named definition for every dispatch; do not pass a model override.
+An override can silently bypass the tested role/model pairing.
+
+Choose one model family during Setup and keep it for the entire run:
+
+| Family | Selection rule | Agent naming | Lower-cost model | Deep model |
+|--------|----------------|--------------|------------------|------------|
+| Claude | Claude controller/session, or an explicit Claude request | base name, such as `impl-l1-2` | `sonnet` | `opus` |
+| GPT | GPT controller/session, or an explicit GPT request | `-gpt` suffix, such as `impl-l1-2-gpt` | `luna` | `sol` |
+
+An explicit user choice wins; otherwise follow the controller/session family.
+If the family cannot be identified, retain the Claude family for backward
+compatibility and record that choice in the ledger. Do not mix families in
+one run unless a selected definition is unavailable; ledger any fallback.
 
 **Implementation.** Rate the task's difficulty (Level 1 ~ 5) from the brief,
-then dispatch the matching agent. State the assigned Level plus a one-line
-rationale in the dispatch prompt.
+then dispatch the matching family-specific agent. State the assigned Level
+plus a one-line rationale in the dispatch prompt.
 
-| Level | Signals | Agent | Model |
-|-------|---------|-------|-------|
-| L1 | single file; the plan text contains the full code; transcription + tests | `impl-l1-2` | `sonnet` |
-| L2 | 1 ~ 2 files; complete spec; follows existing patterns | `impl-l1-2` | `sonnet` |
-| L3 | multi-file integration; requires grasp of existing patterns | `impl-l3-4` | `opus` |
-| L4 | design judgment; broad codebase understanding; non-obvious debugging | `impl-l3-4` | `opus` |
-| L5 | architecture decisions; subtle concurrency / performance / security correctness | `impl-l5` | `opus` |
+| Level | Signals | Claude agent/model | GPT agent/model |
+|-------|---------|--------------------|-----------------|
+| L1 | single file; the plan text contains the full code; transcription + tests | `impl-l1-2` / `sonnet` | `impl-l1-2-gpt` / `luna` |
+| L2 | 1 ~ 2 files; complete spec; follows existing patterns | `impl-l1-2` / `sonnet` | `impl-l1-2-gpt` / `luna` |
+| L3 | multi-file integration; requires grasp of existing patterns | `impl-l3-4` / `opus` | `impl-l3-4-gpt` / `sol` |
+| L4 | design judgment; broad codebase understanding; non-obvious debugging | `impl-l3-4` / `opus` | `impl-l3-4-gpt` / `sol` |
+| L5 | architecture decisions; subtle concurrency / performance / security correctness | `impl-l5` / `opus` | `impl-l5-gpt` / `sol` |
 
 **Task review.** Scale to the diff's size, complexity, and risk — not to the
 implementer's tier.
 
-| Diff | Agent | Model |
-|------|-------|-------|
-| Small or mechanical (renames, config, single function, straightforward refactor, under ~200 lines of obvious intent) | `review-small` | `sonnet` |
-| Concurrency, memory or lifetime, security or trust boundaries, public interfaces, data migration, hot paths, many modules | `review-complex` | `opus` |
+| Diff | Claude agent/model | GPT agent/model |
+|------|--------------------|-----------------|
+| Small or mechanical (renames, config, single function, straightforward refactor, under ~200 lines of obvious intent) | `review-small` / `sonnet` | `review-small-gpt` / `luna` |
+| Concurrency, memory or lifetime, security or trust boundaries, public interfaces, data migration, hot paths, many modules | `review-complex` / `opus` | `review-complex-gpt` / `sol` |
 
-Scoped re-reviews of small fix diffs take `review-small` on `sonnet`.
+**Scoped re-review:** `review-small` / `sonnet` for Claude, or
+`review-small-gpt` / `luna` for GPT. Use the complex reviewer variant only
+for the high-risk conditions in the table.
 
-**Final whole-branch review:** `review-branch` on `sonnet`.
+**Final whole-branch review:** `review-branch` / `sonnet` for Claude, or
+`review-branch-gpt` / `luna` for GPT.
 
-**Fix loop:** see The Fix Loop below — rounds 1 ~ 3 resume the original
-implementer; rounds 4 ~ 5 use `fix-loop` on `sonnet`.
+**Fix loop:** rounds 1 ~ 3 resume the original implementer. Rounds 4 ~ 5 use
+`fix-loop` / `sonnet` for Claude, or `fix-loop-gpt` / `luna` for GPT.
 
-Never use `haiku` to save cost — quality first.
+GPT dispatches may use only `sol` and `luna`. Every `luna` definition must use
+`high` effort or above. Never substitute another GPT model or lower `luna`'s
+effort. Claude dispatches never use `haiku` to save cost — quality first.
+
+Below, a bare role such as `fix-loop` or `review-branch` means the selected
+family's matching definition, including the `-gpt` suffix for GPT.
 
 **Turn count beats token price.** Wall-clock and context cost scale with how
 many turns a subagent takes, and an under-powered model routinely takes 2 ~ 3×
 the turns on multi-step work — costing more overall. When a task sits on a
-Level boundary, take the higher Level.
+Level boundary, take the higher Level and its family-specific agent.
 
 ## The Task Loop
 
@@ -386,7 +406,8 @@ dispatch a fresh implementer at the same Level carrying the brief path, the
 report-file path, and the findings — the report file is the persistent memory
 either way.
 
-**Rounds 4 ~ 5 — dispatch the `fix-loop` agent on `sonnet`,** with the brief
+**Rounds 4 ~ 5 — dispatch the selected family's fix-loop agent** (`fix-loop` on
+`sonnet`, or `fix-loop-gpt` on `luna`), with the brief
 path, the report-file path, the open findings, and this framing: "A prior
 implementer attempted this task [N] times; you own it now. Read the report
 file for what was tried." By round 4 the findings are already identified and
@@ -396,8 +417,9 @@ resumes.
 
 The exception: if the loop is stuck because the task genuinely exceeds the
 implementer's capability — a design or concurrency problem, not an
-application problem — escalate instead to `impl-l3-4` on `opus` (or
-`impl-l5` on `opus` for architecture or subtle correctness). Ledger which
+application problem — escalate instead to the selected family's deep implementation agent:
+`impl-l3-4` / `impl-l5` on `opus`, or `impl-l3-4-gpt` / `impl-l5-gpt` on
+`sol`. Ledger which
 route you took and why.
 
 **Every round, either way:** the implementer fixes, re-runs the tests
@@ -465,15 +487,18 @@ branch started from, e.g. `git merge-base main HEAD`) and include the
 printed path in the final review dispatch, so the final reviewer reads
 one file instead of re-deriving the branch diff with git commands.
 
-Dispatch the `review-branch` agent on `sonnet`. It reviews the accumulated
+Dispatch the selected family's final reviewer (`review-branch` on `sonnet`, or
+`review-branch-gpt` on `luna`). It reviews the accumulated
 diff as one coherent change rather than commit by commit. Give it: the plan
 file path, the review-package path, the branch's merge base and head, and
 the ledger's deferred-minor and parked lines so it can triage which must be
 fixed before merge.
 
 If the final whole-branch review returns findings, dispatch ONE fix subagent
-with the complete findings list — not one fixer per finding. Use `fix-loop`
-on `sonnet`; escalate to `impl-l3-4` on `opus` only if a finding needs design
+with the complete findings list — not one fixer per finding. Use the selected
+family's fix-loop agent (`fix-loop` on `sonnet`, or `fix-loop-gpt` on `luna`);
+escalate to its deep implementation agent (`impl-l3-4` on `opus`, or
+`impl-l3-4-gpt` on `sol`) only if a finding needs design
 judgment rather than applying a known correction.
 Per-finding fixers each rebuild context and re-run suites; a real
 session's final-review fix wave cost more than all its tasks combined.
@@ -526,7 +551,7 @@ Then hand the branch back rather than landing it yourself:
 | "Reviews slow the loop down" | The loop without reviews is just unverified churn. Reviews are the loop's brakes and steering. |
 | "Ledger bookkeeping is overhead" | The ledger is what survives compaction. Controllers without one have re-dispatched entire completed task sequences. |
 | "The implementer spawned its own reviewer — free extra assurance" | It's a duplicate seat reviewing the same diff; the task review is the gate. A worker-spawned reviewer is a defect to flag, not rigor. |
-| "I'll let the agent inherit the session model, it's fine" | An omitted model silently takes the most expensive tier on every dispatch. Name the agent type and the model, every time. |
+| "I'll use the base agent name for a GPT run" | Base names select Claude definitions. GPT runs use the matching `-gpt` definition so its `sol`/`luna` frontmatter remains authoritative. |
 
 ## Example Workflow
 
@@ -542,7 +567,7 @@ Task 1: Hook installation script
 
 [Run task-brief for Task 1]
 [Rate: L2 — 2 files, complete spec, follows existing CLI patterns]
-[Dispatch impl-l1-2 on sonnet with brief + report paths + context]
+[Dispatch impl-l1-2/sonnet or impl-l1-2-gpt/luna with brief + report paths + context]
 
 Implementer: "Before I begin - should the hook be installed at user or system level?"
 
@@ -555,7 +580,7 @@ Implementer: [Later]
   - Committed
 
 [Run review-package PLAN_FILE BASE HEAD]
-[Diff is small and mechanical → dispatch review-small on sonnet with the printed path]
+[Diff is small and mechanical → dispatch review-small/sonnet or review-small-gpt/luna with the printed path]
 Task reviewer: Spec ✅ - all requirements met, nothing extra.
   Strengths: Good test coverage, clean. Issues: None. Task quality: Approved.
 
@@ -565,14 +590,14 @@ Task 2: Recovery modes
 
 [Run task-brief for Task 2]
 [Rate: L3 — touches the CLI, the recovery module, and the state store]
-[Dispatch impl-l3-4 on opus with brief + report paths + context]
+[Dispatch impl-l3-4/opus or impl-l3-4-gpt/sol with brief + report paths + context]
 
 Implementer: [No questions]
   - Added verify/repair modes
   - 8/8 tests passing
   - Committed
 
-[Run review-package PLAN_FILE BASE HEAD; dispatch review-complex on opus — touches the state store]
+[Run review-package PLAN_FILE BASE HEAD; dispatch review-complex/opus or review-complex-gpt/sol — touches the state store]
 Task reviewer: Spec ❌:
   - Missing: Progress reporting (spec says "report every 100 items")
   Issues (Important): Magic number (100)
@@ -581,7 +606,7 @@ Task reviewer: Spec ❌:
 Implementer: Added progress reporting, extracted PROGRESS_INTERVAL constant.
   Re-ran test/recovery.test.js — 10/10 passing. Fix report appended.
 
-[Run review-package PLAN_FILE FIX_BASE HEAD; dispatch scoped re-review on review-small / sonnet]
+[Run review-package PLAN_FILE FIX_BASE HEAD; dispatch scoped re-review on review-small/sonnet or review-small-gpt/luna]
 Re-reviewer: Missing progress reporting — ADDRESSED (src/recovery.js:41).
   Magic number — ADDRESSED (src/recovery.js:7). New breakage: none.
   Verdict: all findings addressed.
@@ -592,7 +617,7 @@ Re-reviewer: Missing progress reporting — ADDRESSED (src/recovery.js:41).
 ...
 
 [After all tasks]
-[Run review-package PLAN_FILE MERGE_BASE HEAD; dispatch review-branch on sonnet]
+[Run review-package PLAN_FILE MERGE_BASE HEAD; dispatch review-branch/sonnet or review-branch-gpt/luna]
 Final reviewer: All requirements met. Deferred minors triaged: none block merge.
 
 [Delete this plan's workspace — the record now lives in git]

@@ -9,12 +9,11 @@ that the fix itself broke nothing.
 
 ```
 Subagent:
-  subagent_type: [AGENT — REQUIRED: review-small for a small fix diff;
-                 review-complex only if the fix touches concurrency,
-                 security, or a public interface]
+  subagent_type: [AGENT — REQUIRED: selected family variant of
+                 review-small for a small fix diff; review-complex only if the fix
+                 touches concurrency, security, or a public interface]
   description: "Re-review Task N fix round R"
-  model: [MODEL — REQUIRED: sonnet (review-small) | opus (review-complex);
-         an omitted model silently inherits the session's most expensive one]
+  # Do not pass model for a named definition; its frontmatter owns model and effort.
   prompt: |
     You are re-reviewing one task's fix round. A previous review produced
     findings; an implementer has attempted to fix them. Your job is to
@@ -104,10 +103,10 @@ Subagent:
 ```
 
 **Placeholders:**
-- `[AGENT]` — REQUIRED: `review-small` for a small fix diff; `review-complex`
-  only if the fix touches concurrency, security, or a public interface
-- `[MODEL]` — REQUIRED: `sonnet` with `review-small`, `opus` with
-  `review-complex`
+- `[AGENT]` — REQUIRED: Claude uses `review-small` for a small fix diff
+  and `review-complex` for high-risk fixes; GPT uses the matching `-gpt`
+  definition. Named definitions supply the model: Claude `sonnet`/`opus`;
+  GPT `luna`/`sol` only.
 - `[BRIEF_FILE]` — the task brief file (same file the implementer worked from)
 - `[FINDINGS]` — the Critical/Important findings and spec gaps from the
   previous review, copied verbatim, one per bullet

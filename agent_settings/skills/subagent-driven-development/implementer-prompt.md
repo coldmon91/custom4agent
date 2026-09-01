@@ -4,11 +4,10 @@ Use this template when dispatching an implementer subagent.
 
 ```
 Subagent:
-  subagent_type: [AGENT — REQUIRED: impl-l1-2 | impl-l3-4 | impl-l5,
-                 per SKILL.md Agent and Model Selection]
+  subagent_type: [AGENT — REQUIRED: selected family variant of
+                 impl-l1-2 | impl-l3-4 | impl-l5, per SKILL.md Agent and Model Selection]
   description: "Implement Task N: [task name]"
-  model: [MODEL — REQUIRED: sonnet (L1~2) | opus (L3~5);
-         an omitted model silently inherits the session's most expensive one]
+  # Do not pass model for a named definition; its frontmatter owns model and effort.
   prompt: |
     You are implementing Task N: [task name]
 
@@ -164,9 +163,10 @@ Subagent:
 ```
 
 **Placeholders:**
-- `[AGENT]` — REQUIRED: `impl-l1-2` (L1 ~ 2), `impl-l3-4` (L3 ~ 4), or
-  `impl-l5` (L5)
-- `[MODEL]` — REQUIRED: `sonnet` (L1 ~ 2), `opus` (L3 ~ 5)
+- `[AGENT]` — REQUIRED: Claude uses `impl-l1-2` (L1 ~ 2),
+  `impl-l3-4` (L3 ~ 4), or `impl-l5` (L5); GPT uses the matching `-gpt`
+  definition. Named definitions supply the model: Claude `sonnet`/`opus`;
+  GPT `luna`/`sol` only.
 - `[BRIEF_FILE]` — REQUIRED: `scripts/task-brief PLAN_FILE N` prints the path
 - `[REPORT_FILE]` — REQUIRED: the brief path with `-brief.md` → `-report.md`
 - `[directory]` — the absolute path of the branch or worktree being worked in
