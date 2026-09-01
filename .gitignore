@@ -23,3 +23,7 @@ agent_settings/skills/.system
 # Symlinks to machine-local skill sources
 agent_settings/skills/korean-report-doc
 agent_settings/skills/korean-report-style
+
+# npm build artifacts
+pi-agent/packages/*/node_modules/
+pi-agent/packages/*/*.tgz

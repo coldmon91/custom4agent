@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023"],
+    "module": "ESNext",
+    // pi loads these .ts files through a bundler-style resolver, so extensionless
+    // relative imports must typecheck the same way they run.
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  "include": ["extensions/**/*.ts", "src/**/*.ts"]
+}

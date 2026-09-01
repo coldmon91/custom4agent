@@ -1,0 +1,56 @@
+{
+  "name": "pi-model-thinking-selector",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Pi extension that adds a searchable model picker with favorites, recents, and per-model thinking effort, persisted across sessions.",
+  "license": "MIT",
+  "author": "coldmon91",
+  "homepage": "https://github.com/coldmon91/custom4agent/tree/main/pi-agent/packages/pi-model-thinking-selector#readme",
+  "bugs": {
+    "url": "https://github.com/coldmon91/custom4agent/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coldmon91/custom4agent.git",
+    "directory": "pi-agent/packages/pi-model-thinking-selector"
+  },
+  "keywords": [
+    "pi",
+    "pi-package",
+    "pi-extension",
+    "model-picker",
+    "thinking-level",
+    "reasoning-effort",
+    "ai"
+  ],
+  "files": [
+    "extensions",
+    "src",
+    "LICENSE",
+    "README.md"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions/model-thinking-selector.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "^0.84.4",
+    "@earendil-works/pi-coding-agent": "^0.84.4",
+    "@earendil-works/pi-tui": "^0.84.4",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}
