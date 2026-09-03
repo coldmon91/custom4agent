@@ -1,6 +1,5 @@
-import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, SessionEntry } from "@earendil-works/pi-coding-agent";
 
-const STATUS_KEY = "together-session-balance";
 const PROVIDER = "together";
 const TOKEN_FORMATTER = new Intl.NumberFormat("en-US");
 
@@ -84,7 +83,8 @@ function totalTokens(usage: UsageTotals): number {
 }
 
 export function formatTogetherStatus(usage: TogetherSessionUsage): string {
-  return `$${usage.cost.toFixed(6)}`;
+  // 3 decimals, rounded — consistent with the footer's branch cost display.
+  return `$${usage.cost.toFixed(3)}`;
 }
 
 export function formatTogetherDetails(usage: TogetherSessionUsage): string {
@@ -104,38 +104,12 @@ export function formatTogetherDetails(usage: TogetherSessionUsage): string {
   return lines.join("\n");
 }
 
-function refreshStatus(ctx: ExtensionContext): TogetherSessionUsage {
-  const usage = calculateTogetherSessionUsage(ctx.sessionManager.getEntries());
-  const status = ctx.model?.provider === PROVIDER ? formatTogetherStatus(usage) : undefined;
-  ctx.ui.setStatus(STATUS_KEY, status);
-  return usage;
-}
-
 export default function togetherSessionBalance(pi: ExtensionAPI): void {
   pi.registerCommand("together-balance", {
     description: "Show Together usage for the entire current pi session",
-    handler: (_args, ctx) => {
-      ctx.ui.notify(formatTogetherDetails(refreshStatus(ctx)), "info");
+    handler: async (_args, ctx) => {
+      const usage = calculateTogetherSessionUsage(ctx.sessionManager.getEntries());
+      ctx.ui.notify(formatTogetherDetails(usage), "info");
     },
-  });
-
-  pi.on("session_start", (_event, ctx) => {
-    refreshStatus(ctx);
-  });
-
-  pi.on("model_select", (_event, ctx) => {
-    refreshStatus(ctx);
-  });
-
-  pi.on("agent_end", (_event, ctx) => {
-    refreshStatus(ctx);
-  });
-
-  pi.on("session_shutdown", (_event, ctx) => {
-    try {
-      ctx.ui.setStatus(STATUS_KEY, undefined);
-    } catch {
-      // A replaced session can invalidate its previous UI context before cleanup.
-    }
   });
 }

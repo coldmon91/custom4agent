@@ -3,6 +3,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { hostname, userInfo } from "node:os";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { thinkingColor } from "./thinking-colors";
+import {
+  calculateTogetherSessionUsage,
+  formatTogetherStatus,
+} from "./together-session-balance";
 
 function formatCwd(cwd: string): string {
   const home = process.env.HOME;
@@ -73,7 +77,10 @@ export default function footerModelUnderCwd(pi: ExtensionAPI) {
           const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "no-model";
           const thinking = pi.getThinkingLevel();
           const modeStatus = statuses.length > 0 ? `${statuses.join(` ${theme.fg("dim", "·")} `)}  ` : "";
-          const modelLineLeft = `${modeStatus}${theme.fg("accent", model)} ${theme.fg("dim", "· ")}${theme.fg(thinkingColor(thinking), thinking)}`;
+          const togetherBalance = ctx.model?.provider === "together"
+            ? theme.fg("dim", ` · ${formatTogetherStatus(calculateTogetherSessionUsage(ctx.sessionManager.getEntries()))}`)
+            : "";
+          const modelLineLeft = `${modeStatus}${theme.fg("accent", model)} ${theme.fg("dim", "· ")}${theme.fg(thinkingColor(thinking), thinking)}${togetherBalance}`;
           const modelLineRight = theme.fg(
             "dim",
             `${context} · ↑${fmt(input)} ↓${fmt(output)} R${fmt(cacheRead)} W${fmt(cacheWrite)} $${cost.toFixed(3)}`,
