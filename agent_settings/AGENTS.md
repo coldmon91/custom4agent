@@ -29,6 +29,8 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 
 ## Programming
 - New code: one responsibility per file, split by role
+- Always consider **maintainability**, testability
+- Prefer simple, clear
 - Assess side effects (behavior, perf, compat, integration) before and after changes
 - State planned change direction and get approval before editing
 - Read doc/ or docs/ overviews when starting a project
@@ -38,8 +40,6 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Code principles: clean/meaningful naming, optimal time & space, thorough error handling, brief rationale after writing, secure coding
 - Reuse common behavior via functions/methods/modules
 - State the next tasks when work remains
-- Use sub-agents in parallel for independent subtasks. Do not spawn them for simple or sequentially dependent work.
-- Dispatch subagents by named definition. Claude uses the base definitions (`impl-l1-2` / `impl-l3-4` / `impl-l5` / `review-*` / `fix-loop`); GPT uses their `-gpt` variants. Each definition owns its model and effort. GPT definitions use only `sol` or `luna`, and every `luna` definition uses `high` effort or above. Specify `model` explicitly only for unnamed dispatches (e.g. `general-purpose`).
 
 ### C++
 - Braces on all if statements; modern C++ (17+); RAII where possible
