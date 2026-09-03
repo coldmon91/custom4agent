@@ -8,6 +8,14 @@ import {
   formatTogetherStatus,
 } from "./together-session-balance";
 
+const DIRECTORY_COLOR = "\x1b[38;2;37;99;235m";
+const BRANCH_COLOR = "\x1b[38;2;74;222;128m";
+const RESET_FOREGROUND = "\x1b[39m";
+
+function colorize(text: string, color: string): string {
+  return `${color}${text}${RESET_FOREGROUND}`;
+}
+
 function formatCwd(cwd: string): string {
   const home = process.env.HOME;
   if (home && cwd.startsWith(home)) return `~${cwd.slice(home.length)}`;
@@ -70,10 +78,11 @@ export default function footerModelUnderCwd(pi: ExtensionAPI) {
           const branch = footerData.getGitBranch();
           const sessionName = ctx.sessionManager.getSessionName?.();
           const statuses = [...footerData.getExtensionStatuses().values()].filter(Boolean);
-          const pathLineLeft = theme.fg(
-            "dim",
-            `${identity} · ${cwd}${branch ? ` (${branch})` : ""}${sessionName ? ` · ${sessionName}` : ""}`,
-          );
+          const branchLabel = branch
+            ? `${theme.fg("dim", " (")}${colorize(branch, BRANCH_COLOR)}${theme.fg("dim", ")")}`
+            : "";
+          const sessionLabel = sessionName ? theme.fg("dim", ` · ${sessionName}`) : "";
+          const pathLineLeft = `${theme.fg("dim", `${identity} · `)}${colorize(cwd, DIRECTORY_COLOR)}${branchLabel}${sessionLabel}`;
           const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "no-model";
           const thinking = pi.getThinkingLevel();
           const modeStatus = statuses.length > 0 ? `${statuses.join(` ${theme.fg("dim", "·")} `)}  ` : "";
