@@ -73,8 +73,8 @@ Subagent:
 
     ## Tests
 
-    The implementer already ran the tests and reported results with TDD
-    evidence for exactly this code. Do not re-run the suite to confirm their
+    The implementer already ran the tests and reported test results
+    for exactly this code. Do not re-run the suite to confirm their
     report. Run a test only when reading the code raises a specific doubt
     that no existing run answers — and then a focused test, never a
     package-wide suite, race detector run, or repeated/high-count loop. If
