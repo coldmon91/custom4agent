@@ -257,15 +257,42 @@ prints back — stays resident in your context for the rest of the session
 and is re-read on every later turn. Hand artifacts over as files.
 
 **Waiting on dispatched subagents:** never poll a wait interface with
-short timeouts, and never sit in one silent, open-ended wait either.
-While you have local work — ledger updates, packaging the next review,
-reading reports — keep working; child results arrive on their own.
-When you are genuinely idle, wait in bounded stretches (five to ten
-minutes, where your platform allows), and between stretches post one
-line of status and reconcile your live children: list them, and chase
-any that finished without reporting. A bounded stretch keeps nearly
-all of a long wait's efficiency while guaranteeing a stuck or lost
-child is noticed within minutes, not at the end of the session.
+short timeouts, and never hand a dispatch one long open-ended timeout
+and walk away. Both extremes fail: short polling burns context on empty
+turns, while a single oversized timeout means a subagent stuck in a
+retry loop, a hung test run, or a crashed child is discovered only when
+the whole budget expires — after the wall-clock and tokens are already
+spent.
+
+- **Cap any single wait at 5 ~ 10 minutes**, whatever the task's total
+  expected duration. A 40-minute task is five to eight bounded waits,
+  never one 40-minute wait.
+- **While you have local work** — ledger updates, packaging the next
+  review, reading reports — keep working; child results arrive on
+  their own. Do not wait at all when there is work in hand.
+- **Check progress between stretches.** After each bounded wait, post
+  one line of status and reconcile your live children before waiting
+  again. A stuck child must be noticed within minutes, not at the end
+  of the session.
+
+Progress checks read evidence, never assume it — a running agent that
+has produced nothing is indistinguishable from a hung one until you
+look:
+
+- List live children and chase any that finished without reporting.
+- Check the task's report file — existence, size, and mtime. A report
+  that has not grown across two consecutive checks is a stall signal.
+- Check `git log --oneline BASE..HEAD` in the workspace for commits the
+  child has landed so far.
+- Look for stray background processes or leftover temp files the child
+  was told to clean up.
+
+When a check shows no progress across two consecutive stretches, act:
+message the child for a one-line status if your platform allows it,
+otherwise stop it, ledger what it did complete, and re-dispatch the
+remainder with the partial state carried in the new brief. Never extend
+the timeout as the response to a stall — a longer wait does not unstick
+a stuck agent.
 
 ### 1. Dispatch the implementer
 
@@ -551,6 +578,8 @@ Then hand the branch back rather than landing it yourself:
 | "Reviews slow the loop down" | The loop without reviews is just unverified churn. Reviews are the loop's brakes and steering. |
 | "Ledger bookkeeping is overhead" | The ledger is what survives compaction. Controllers without one have re-dispatched entire completed task sequences. |
 | "The implementer spawned its own reviewer — free extra assurance" | It's a duplicate seat reviewing the same diff; the task review is the gate. A worker-spawned reviewer is a defect to flag, not rigor. |
+| "I'll set a long timeout so it never gets cut off" | An oversized timeout hides stalls instead of preventing them. Cap each wait at 5 ~ 10 minutes and check the report file, commits, and live children between stretches. |
+| "It's still running, so it's still working" | A hung test run and a productive agent look identical from the outside. Progress is a growing report or a new commit — not an open handle. |
 | "I'll use the base agent name for a GPT run" | Base names select Claude definitions. GPT runs use the matching `-gpt` definition so its `sol`/`luna` frontmatter remains authoritative. |
 
 ## Example Workflow
