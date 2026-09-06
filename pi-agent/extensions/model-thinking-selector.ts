@@ -322,7 +322,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
     },
   });
 
-  pi.registerShortcut("alt+p", {
+  pi.registerShortcut("ctrl+alt+p", {
     description: "Select model and thinking level",
     handler: async (ctx) => {
       const [modelData, loadedFavoriteStore] = await Promise.all([
