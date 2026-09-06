@@ -8,7 +8,7 @@ description: "Use when a spec or design doc is approved and a multi-step impleme
 ## Overview
 
 Write comprehensive implementation plans assuming the engineer has zero context for our codebase and questionable taste.
-Document everything they need to know: which files to touch for each task, the code itself, docs they might need to check, and how to confirm the change actually works.
+Document everything they need to know: which files to touch for each task, the invariants and test assertions each task must satisfy, docs they might need to check, and how to confirm the change actually works.
 Give them the whole plan as bite-sized tasks.
 
 Assume they are a skilled developer, but know almost nothing about our toolset or problem domain.
@@ -96,13 +96,21 @@ include this section.]
   and return types. A task's implementer sees only their own task; this
   block is how they learn the names and types neighboring tasks use.]
 
-- [ ] **Step 1: Write the implementation**
+- [ ] **Step 1: State the invariants and test assertions**
 
-```<language>
-<the actual code — not a description of it>
-```
+**Invariants:** [what must hold regardless of implementation — one line
+each, each one checkable. Cover pre/postconditions, ordering and
+concurrency rules, resource lifetimes, error paths.]
 
-- [ ] **Step 2: Verify**
+**Test assertions:** [literal assertion lines — the exact calls, inputs,
+and expected values, in the project's test framework. Name the test file.]
+
+- [ ] **Step 2: Implement until the assertions hold**
+
+The implementer chooses the code. Do not prescribe it here — the
+invariants and assertions above are the contract.
+
+- [ ] **Step 3: Verify**
 
 Run: `<exact command>`
 Expected: `<exact observable result>`
@@ -121,7 +129,7 @@ These are **plan failures** — never write them:
 - "Add appropriate error handling" / "add validation" / "handle edge cases"
 - "Verify it works" / "confirm the output looks correct" (without a literal command and expected result)
 - "Similar to Task N" (repeat the code — the engineer may be reading tasks out of order)
-- Steps that describe what to do without showing how (code blocks required for code steps)
+- Invariants too vague to check ("behaves correctly", "is efficient") or test assertions without literal inputs and expected values
 - References to types, functions, or methods not defined in any task
 
 ## Self-Review
@@ -133,7 +141,9 @@ This is a checklist you run yourself — not a subagent dispatch.
 
 **2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
 
-**3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
+**3. Assertion strength:** For each task, do its invariants and test assertions actually pin down the spec requirement it implements? An implementation that satisfies every assertion but misses the requirement means the assertions are too weak — tighten them.
+
+**4. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
 
 If you find issues, fix them inline.
 No need to re-review — just fix and move on.
