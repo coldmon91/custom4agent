@@ -33,7 +33,7 @@ Create a task for each of these items and complete them in order:
 5. **Write design doc** — save to `docs/specs/YYYY-MM-DD-<topic>-design.md`
 6. **Spec self-review** — inline check for placeholders, contradictions, ambiguity, scope
 7. **User reviews written spec** — ask the user to review the spec file before proceeding
-8. **Hand off to implementation** — present the implementation plan derived from the approved spec
+8. **Hand off to writing-plans** — once the spec is approved, invoke the writing-plans skill; do not draft the plan here
 
 ## Process Flow
 
@@ -47,7 +47,7 @@ digraph brainstorming {
     "Write design doc" [shape=box];
     "Spec self-review\n(fix inline)" [shape=box];
     "User reviews spec?" [shape=diamond];
-    "Hand off to implementation" [shape=doublecircle];
+    "Hand off to writing-plans" [shape=doublecircle];
 
     "Explore project context" -> "Ask clarifying questions";
     "Ask clarifying questions" -> "Propose 2~3 approaches";
@@ -58,7 +58,7 @@ digraph brainstorming {
     "Write design doc" -> "Spec self-review\n(fix inline)";
     "Spec self-review\n(fix inline)" -> "User reviews spec?";
     "User reviews spec?" -> "Write design doc" [label="changes requested"];
-    "User reviews spec?" -> "Hand off to implementation" [label="approved"];
+    "User reviews spec?" -> "Hand off to writing-plans" [label="approved"];
 }
 ```
 
@@ -140,5 +140,8 @@ Only proceed once the user approves.
 
 **Implementation hand-off:**
 
-Once the spec is approved, derive an implementation plan from it — ordered tasks, each with the files it touches and how it will be verified — and present that plan.
-Start writing code only after the user approves the plan.
+Once the spec is approved, invoke the writing-plans skill and pass it the spec path.
+That skill owns the implementation plan — the ordered tasks, the files each one touches, and the verification command per step.
+
+Do NOT draft an implementation plan here, and do NOT write code.
+This skill ends at an approved spec.
