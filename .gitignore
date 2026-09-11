@@ -27,3 +27,5 @@ agent_settings/skills/korean-report-style
 # npm build artifacts
 pi-agent/packages/*/node_modules/
 pi-agent/packages/*/*.tgz
+pi-agent/extensions/*/node_modules/
+pi-agent/tmp/

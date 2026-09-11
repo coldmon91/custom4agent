@@ -1,0 +1,13 @@
+{
+  "name": "pi-ask-user",
+  "private": true,
+  "type": "module",
+  "description": "Ask the user multiple-choice questions from a pi tool call",
+  "dependencies": {
+    "@earendil-works/pi-tui": "0.85.1",
+    "typebox": "1.3.7"
+  },
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
