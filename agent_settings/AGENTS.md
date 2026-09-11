@@ -5,20 +5,21 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 
 ## Rules
 - Tilde ranges spaced: `1 ~ 3`, not `1~3`
+- Line break at sentence end for readability
 - Base every answer on evidence
+- Write in noun phrases by default
 - Double-check before `rm` on a directory
 - Don't auto-process large files (token cost)
-- Use "-" for lists
-- Check today's date, then web-search/context7 (mcp) for latest versions
-- Line break at sentence end for readability
-- Write in noun phrases by default
-- Mark TODOs done after finishing (`- [ ]` -> `- [x]`)
-- If user's request is ambiguous, ask for clarification
+- Mark TODOs done after finishing (`- [ ]` -&gt; `- [x]`)
+- If the request is ambiguous, investigate first; ask only when readings diverge materially
 - When you give advice or make a recommendation, add a simple reason
 - Keep comments concise, core points only
 - Always check whether the user’s request is valid
 - Do not create a git branch without asking the user for permission first
 - `fd` (fd-find) over `find`; `rg` (ripgrep) over `grep`
+- Before overwriting an existing file, read the current content, diff it against the new
+  version, and report what would be lost. Deploying, copying, and uploading are overwrites
+  too. For a config file, ask the user whether any value must be preserved
 
 ## Process Execution
 - Before/after execution: assess persistence and CPU/memory/disk/network impact; verify cleanup and host recovery
@@ -33,8 +34,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Prefer simple, clear
 - Assess side effects (behavior, perf, compat, integration) before and after changes
 - State planned change direction and get approval before editing
-- Read doc/ or docs/ overviews when starting a project
-- Delete temp files/dirs after the task (keep MCP: .serena, .codegraph...)
+- Read doc/ or docs/ overviews when starting a session
 - Confirm work matches the user's explicit request; don't infer unstated requirements
 - Comments in English; explain only core logic (no diff/change notes)
 - Code principles: clean/meaningful naming, optimal time & space, thorough error handling, brief rationale after writing, secure coding
@@ -55,3 +55,4 @@ tab_spaces = 4
 newline_style = "Unix"
 use_small_heuristics = "Default"
 ```
+
