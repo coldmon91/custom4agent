@@ -33,7 +33,7 @@ Create a task for each of these items and complete them in order:
 5. **Write design doc** — save to `docs/specs/YYYY-MM-DD-<topic>-design.md`
 6. **Spec self-review** — inline check for placeholders, contradictions, ambiguity, scope
 7. **User reviews written spec** — ask the user to review the spec file before proceeding
-8. **Hand off to writing-plans** — once the spec is approved, invoke the writing-plans skill; do not draft the plan here
+8. **Hand off to writing-plans** — once the spec is approved, ask whether to proceed; if approved, invoke the writing-plans skill and do not draft the plan here
 
 ## Process Flow
 
@@ -47,6 +47,7 @@ digraph brainstorming {
     "Write design doc" [shape=box];
     "Spec self-review\n(fix inline)" [shape=box];
     "User reviews spec?" [shape=diamond];
+    "Ask: proceed to writing-plans?" [shape=diamond];
     "Hand off to writing-plans" [shape=doublecircle];
 
     "Explore project context" -> "Ask clarifying questions";
@@ -58,7 +59,8 @@ digraph brainstorming {
     "Write design doc" -> "Spec self-review\n(fix inline)";
     "Spec self-review\n(fix inline)" -> "User reviews spec?";
     "User reviews spec?" -> "Write design doc" [label="changes requested"];
-    "User reviews spec?" -> "Hand off to writing-plans" [label="approved"];
+    "User reviews spec?" -> "Ask: proceed to writing-plans?" [label="approved"];
+    "Ask: proceed to writing-plans?" -> "Hand off to writing-plans" [label="yes"];
 }
 ```
 
@@ -140,8 +142,11 @@ Only proceed once the user approves.
 
 **Implementation hand-off:**
 
-Once the spec is approved, invoke the writing-plans skill and pass it the spec path.
-That skill owns the implementation plan — the ordered tasks, the files each one touches, and the verification command per step.
+Once the spec is approved, ask the user whether they want to proceed to creating an implementation plan using the `writing-plans` skill:
 
-Do NOT draft an implementation plan here, and do NOT write code.
-This skill ends at an approved spec.
+> "설계 문서가 확정되었습니다. 이제 `writing-plans` 스킬로 넘어가 상세 구현 계획을 작성할까요?"
+
+- **If the user agrees:** Invoke the `writing-plans` skill and pass it the spec path.
+  That skill owns the implementation plan — the ordered tasks, the files each one touches, and the verification command per step.
+- **If the user declines or wants changes:** Follow the user's instructions (e.g. further refinements or alternative workflows).
+- Do NOT draft an implementation plan here, and do NOT write code directly without an approved implementation plan.
