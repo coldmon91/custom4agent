@@ -12,6 +12,50 @@ interface ToolModeState {
 const READ_TOOLS = ["read", "grep", "find", "ls"];
 const DEFAULT_AUTO_TOOLS = ["read", "bash", "edit", "write", "grep", "find", "ls"];
 const MODE_ORDER: ToolMode[] = ["auto", "read"];
+// Shell tools in preference order; the first active one drives the auto-mode prompt.
+const SHELL_TOOLS = ["bash", "powershell"];
+
+const READ_MODE_PROMPT = [
+  "[READ MODE]",
+  "Use only read-only investigation. Do not propose or attempt file changes in this mode.",
+  "If edits are needed, explain them without applying them.",
+].join("\n");
+
+function shellUsageHint(shellTool: string): string {
+  if (shellTool === "powershell") {
+    return "read files with Get-Content, search with Select-String and Get-ChildItem, and change files with here-strings or short scripts";
+  }
+  return "read files with cat, head, or sed -n, search with grep and find, and change files with sed, heredocs, or short scripts";
+}
+
+// Pi's system prompt carries no OS information, so name the userland the shell
+// commands run against; the model derives the dialect differences from it.
+// Reports the pi host: a shell routed elsewhere (container, micro-VM) is not detected.
+function shellUserland(): string | undefined {
+  switch (process.platform) {
+    case "darwin":
+      return "macOS, BSD userland";
+    case "linux":
+      return "Linux, GNU coreutils";
+    case "win32":
+      return "Git Bash on Windows";
+    default:
+      return undefined;
+  }
+}
+
+function buildAutoModePrompt(shellTool: string): string {
+  // The powershell tool implies Windows; only the POSIX shell needs the userland label.
+  const userland = shellTool === "bash" ? shellUserland() : undefined;
+  const shell = userland ? `\`${shellTool}\` tool (${userland})` : `\`${shellTool}\` tool`;
+
+  return [
+    "[AUTO MODE]",
+    `Do your work through the ${shell} wherever it can accomplish the job: ${shellUsageHint(shellTool)}, rather than the dedicated read, edit, or write tools.`,
+    "Fall back to a dedicated tool only when the shell genuinely cannot do the job.",
+    "This overrides the general preference for dedicated file and search tools.",
+  ].join("\n");
+}
 
 function uniqueToolNames(toolNames: string[]): string[] {
   return [...new Set(toolNames)];
@@ -30,6 +74,11 @@ export default function toolModeCycle(pi: ExtensionAPI) {
 
   function getFallbackAutoTools(): string[] {
     return uniqueToolNames(DEFAULT_AUTO_TOOLS);
+  }
+
+  function activeShellTool(): string | undefined {
+    const active = new Set(pi.getActiveTools());
+    return SHELL_TOOLS.find((tool) => active.has(tool));
   }
 
   function setStatus(ctx: ExtensionContext) {
@@ -133,11 +182,14 @@ export default function toolModeCycle(pi: ExtensionAPI) {
   });
 
   pi.on("before_agent_start", async (event) => {
-    if (currentMode !== "read") return;
+    if (currentMode === "read") {
+      return { systemPrompt: `${event.systemPrompt}\n\n${READ_MODE_PROMPT}` };
+    }
 
-    return {
-      systemPrompt: `${event.systemPrompt}\n\n[READ MODE]\nUse only read-only investigation. Do not propose or attempt file changes in this mode. If edits are needed, explain them without applying them.`,
-    };
+    const shellTool = activeShellTool();
+    if (!shellTool) return;
+
+    return { systemPrompt: `${event.systemPrompt}\n\n${buildAutoModePrompt(shellTool)}` };
   });
 
   pi.on("context", async (event) => {
