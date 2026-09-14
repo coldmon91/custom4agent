@@ -1,6 +1,6 @@
 ---
 name: brainstorming
-description: "Use before any creative work — creating features, building components, adding functionality, or modifying behavior. Explores user intent, requirements, and design through one-question-at-a-time dialogue, then produces an approved design spec. Trigger when the user says things like \"이거 만들어보자\", \"만들고싶어\", \"만들자\", \"X 기능 추가하고 싶어\", \"어떻게 설계하면 좋을까\", \"let's build X\", or hands over a rough idea that has not been turned into a concrete design yet. Do NOT trigger for bug fixes with a known cause, mechanical edits, or pure information lookups."
+description: "Use when the user wants to explore or design a feature, component, or behavior change whose design is not yet settled (e.g. \"어떻게 설계하면 좋을까\", \"X 기능을 만들고 싶어\", or a rough idea). Do NOT restart for a request to implement an already approved design. Do NOT trigger for bug fixes with a known cause, mechanical edits, or pure information lookups."
 ---
 
 # Brainstorming Ideas Into Designs
@@ -13,6 +13,8 @@ Once you understand what you're building, present the design and get user approv
 <HARD-GATE>
 Do NOT write any code, scaffold any project, or take any implementation action until you have presented a design and the user has approved it.
 This applies to EVERY project regardless of perceived simplicity.
+An existing approved design satisfies this gate; reuse it when the user requests implementation.
+A separate implementation plan document is not required to leave this skill.
 </HARD-GATE>
 
 ## Anti-Pattern: "This Is Too Simple To Need A Design"
@@ -33,7 +35,7 @@ Create a task for each of these items and complete them in order:
 5. **Write design doc** — save to `docs/specs/YYYY-MM-DD-<topic>-design.md`
 6. **Spec self-review** — inline check for placeholders, contradictions, ambiguity, scope
 7. **User reviews written spec** — ask the user to review the spec file before proceeding
-8. **Hand off to writing-plans** — once the spec is approved, ask whether to proceed; if approved, invoke the writing-plans skill and do not draft the plan here
+8. **Follow the requested phase** — after spec approval, start implementation when requested; invoke writing-plans only for an explicit plan request or explicit acceptance of an offer to write one
 
 ## Process Flow
 
@@ -47,8 +49,10 @@ digraph brainstorming {
     "Write design doc" [shape=box];
     "Spec self-review\n(fix inline)" [shape=box];
     "User reviews spec?" [shape=diamond];
-    "Ask: proceed to writing-plans?" [shape=diamond];
+    "Requested next phase?" [shape=diamond];
+    "Start implementation" [shape=doublecircle];
     "Hand off to writing-plans" [shape=doublecircle];
+    "Ask which phase to proceed with" [shape=box];
 
     "Explore project context" -> "Ask clarifying questions";
     "Ask clarifying questions" -> "Propose 2~3 approaches";
@@ -59,8 +63,11 @@ digraph brainstorming {
     "Write design doc" -> "Spec self-review\n(fix inline)";
     "Spec self-review\n(fix inline)" -> "User reviews spec?";
     "User reviews spec?" -> "Write design doc" [label="changes requested"];
-    "User reviews spec?" -> "Ask: proceed to writing-plans?" [label="approved"];
-    "Ask: proceed to writing-plans?" -> "Hand off to writing-plans" [label="yes"];
+    "User reviews spec?" -> "Requested next phase?" [label="approved"];
+    "Requested next phase?" -> "Start implementation" [label="implementation requested"];
+    "Requested next phase?" -> "Hand off to writing-plans" [label="plan explicitly requested or accepted"];
+    "Requested next phase?" -> "Ask which phase to proceed with" [label="not specified"];
+    "Ask which phase to proceed with" -> "Requested next phase?" [label="user chooses"];
 }
 ```
 
@@ -75,7 +82,7 @@ digraph brainstorming {
 - If the project is too large for a single spec, help the user decompose it into sub-projects:
   what are the independent pieces, how do they relate, what order should they be built?
   Then brainstorm the first sub-project through the normal design flow.
-  Each sub-project gets its own spec → plan → implementation cycle.
+  Each sub-project gets its own approved spec and implementation; add a separate plan only when explicitly requested or accepted.
 - For appropriately-scoped projects, ask questions one at a time to refine the idea
 - Prefer multiple choice questions when possible, but open-ended is fine too
 - Only one question per message — if a topic needs more exploration, break it into multiple questions
@@ -134,7 +141,7 @@ Fix any issues inline. No need to re-review — just fix and move on.
 
 After the spec self-review passes, ask the user to review the written spec before proceeding:
 
-> "설계 문서를 `<path>`에 작성했어. 검토하고, 구현 계획으로 넘어가기 전에 수정할 부분이 있으면 알려줘."
+> "설계 문서를 `<path>`에 작성했어. 검토하고 수정할 부분이 있으면 알려줘."
 
 Wait for the user's response.
 If they request changes, make them and re-run the spec self-review.
@@ -142,11 +149,16 @@ Only proceed once the user approves.
 
 **Implementation hand-off:**
 
-Once the spec is approved, ask the user whether they want to proceed to creating an implementation plan using the `writing-plans` skill:
+Once the spec is approved, follow the user's requested phase:
 
-> "설계 문서가 확정되었습니다. 이제 `writing-plans` 스킬로 넘어가 상세 구현 계획을 작성할까요?"
+- **Implementation requested** ("구현하자", "구현해줘", "이대로 만들어줘", "implement this"): Start implementation using the approved spec and any existing plan.
+  A missing plan file does not require writing-plans or another planning approval.
+  Organize implementation steps as needed without creating a separate plan document and approval phase.
+- **Plan explicitly requested or accepted:** Invoke the `writing-plans` skill and pass it the spec path.
+  That skill owns the implementation plan; do not draft it here.
+- **Design approved without a next action:** Ask which phase the user wants next; approval alone is not consent to write a plan.
+- **Short agreement** ("좋아", "진행해", "go ahead"): Resolve against the preceding proposal.
+  Agreement to implement means implementation; agreement to an explicit plan-writing offer means planning.
+- **Changes requested:** Revise the spec and repeat its self-review and approval.
 
-- **If the user agrees:** Invoke the `writing-plans` skill and pass it the spec path.
-  That skill owns the implementation plan — the ordered tasks, the files each one touches, and the verification command per step.
-- **If the user declines or wants changes:** Follow the user's instructions (e.g. further refinements or alternative workflows).
-- Do NOT draft an implementation plan here, and do NOT write code directly without an approved implementation plan.
+If a core decision still blocks implementation, ask about that decision rather than restarting the entire design/planning workflow.

@@ -1,9 +1,24 @@
 ---
 name: writing-plans
-description: "Use when a spec or design doc is approved and a multi-step implementation is about to begin, before touching code. Produces a bite-sized implementation plan with exact file paths, interfaces, and a runnable verification command per step. Trigger when the user says things like \"이제 구현 계획 세워줘\", \"작업 순서 정리해줘\", \"이 스펙대로 구현 계획서 작성해줘\", \"write an implementation plan\", or right after the brainstorming skill produces an approved design spec. Do NOT trigger for single-file mechanical edits, bug fixes with a known cause, or when no spec/design exists yet — run brainstorming first."
+description: "Use when the user explicitly requests creating or revising an implementation plan, or explicitly accepts an offer to write one (e.g. \"계획 세워줘\", \"구현 계획서 수정해줘\", \"write an implementation plan\"). Do NOT trigger for implementation requests such as \"구현하자\" or \"이대로 만들어줘\", design approval alone, multi-step work, or a missing plan file."
 ---
 
 # Writing Plans
+
+## Entry Conditions
+
+Select this skill by the user's requested phase, not by implementation complexity.
+
+| User intent | Next action |
+|---|---|
+| Explicitly asks to create or revise a plan, or accepts a specific offer to write one | Use this skill |
+| Requests implementation: "구현하자", "구현해줘", "이대로 만들어줘", "implement this" | Implement using the available design or plan |
+| Says "진행해", "좋아", or "go ahead" | Resolve against the preceding proposal; enter planning only if that proposal was explicitly to write a plan |
+| Approves a design without requesting a next action | Do not treat design approval as planning consent |
+
+A missing plan file is not a reason to invoke this skill or require another planning approval before implementation.
+During implementation, organize the work as needed without turning it into a separate plan document and approval phase.
+If a core requirement is unresolved, ask about that requirement rather than automatically restarting the design/planning workflow.
 
 ## Overview
 
