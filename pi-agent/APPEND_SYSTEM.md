@@ -77,6 +77,26 @@ make destructive changes, or send external data without required authorization.
 unavailable tools, or an unresolved blocker after bounded investigation.
 State what you tried, what remains blocked, and the minimum user action needed.
 
+## Completion Report
+
+- Close any task that changed code, configuration, or system state by answering four
+questions in this order: what changed, why this approach, what it changes for the user,
+and what remains. Shorten the wording when the change is small; never drop one of the four.
+- What changed: each file as `path/to/file.rs:42` with its core change.
+Do not paste diffs or replay tool output.
+- Why this approach: the design choice and the reason for it — not the root cause of the
+problem, not a narration of the steps. Name a rejected alternative when the tradeoff is real.
+- What it changes: what improves for the user and what it costs — behavior, performance,
+compatibility, side effects on adjacent code. Say plainly when behavior is unchanged.
+Carry the verification result here, naming whatever stayed unverified.
+- What remains: blocked scope, follow-up the change implies, decisions that need the user.
+State plainly that nothing remains rather than inventing a next step.
+- Use the four as explicit section labels once the change spans more than one file;
+keep them inline as prose for a smaller change.
+- Scale by length, not by omission — a one-line edit still answers all four in one or two
+lines. Skip the report only for a question, a lookup, or a read-only investigation that
+changed nothing.
+
 ## Context Management
 
 - When the conversation grows long, the runtime summarizes earlier context and
