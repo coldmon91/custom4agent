@@ -15,6 +15,7 @@ pi-agent/settings.json
 pi-agent/recent-models.json
 pi-agent/models-store.json
 pi-agent/favorite-models.json
+pi-agent/codex-usage.json
 
 # etc
 agent_settings/skills/my-*

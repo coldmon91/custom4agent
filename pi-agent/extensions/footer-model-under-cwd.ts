@@ -4,6 +4,12 @@ import { hostname, userInfo } from "node:os";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { thinkingColor } from "./thinking-colors";
 import {
+  CODEX_PROVIDER,
+  getCodexUsageParts,
+  onCodexUsageChange,
+  usageColor,
+} from "./codex-usage-limits";
+import {
   calculateTogetherSessionUsage,
   formatTogetherStatus,
 } from "./together-session-balance";
@@ -48,10 +54,12 @@ export default function footerModelUnderCwd(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     ctx.ui.setFooter((tui, theme, footerData) => {
       const offBranch = footerData.onBranchChange(() => tui.requestRender());
+      const offCodexUsage = onCodexUsageChange(() => tui.requestRender());
 
       return {
         dispose() {
           if (typeof offBranch === "function") offBranch();
+          offCodexUsage();
         },
         invalidate() {},
         render(width: number): string[] {
@@ -86,10 +94,19 @@ export default function footerModelUnderCwd(pi: ExtensionAPI) {
           const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "no-model";
           const thinking = pi.getThinkingLevel();
           const modeStatus = statuses.length > 0 ? `${statuses.join(` ${theme.fg("dim", "·")} `)}  ` : "";
+          const codexUsage =
+            ctx.model?.provider === CODEX_PROVIDER
+              ? getCodexUsageParts()
+                  .map(
+                    (part) =>
+                      `${theme.fg("dim", ` · ${part.label} `)}${theme.fg(usageColor(part.usedPercent), `${Math.round(part.usedPercent)}%`)}`,
+                  )
+                  .join("")
+              : "";
           const togetherBalance = ctx.model?.provider === "together"
             ? theme.fg("dim", ` · ${formatTogetherStatus(calculateTogetherSessionUsage(ctx.sessionManager.getEntries()))}`)
             : "";
-          const modelLineLeft = `${modeStatus}${theme.fg("accent", model)} ${theme.fg("dim", "· ")}${theme.fg(thinkingColor(thinking), thinking)}${togetherBalance}`;
+          const modelLineLeft = `${modeStatus}${theme.fg("accent", model)} ${theme.fg("dim", "· ")}${theme.fg(thinkingColor(thinking), thinking)}${codexUsage}${togetherBalance}`;
           const modelLineRight = theme.fg(
             "dim",
             `${context} · ↑${fmt(input)} ↓${fmt(output)} R${fmt(cacheRead)} W${fmt(cacheWrite)} $${cost.toFixed(3)}`,
