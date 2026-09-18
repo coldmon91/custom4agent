@@ -54,7 +54,7 @@ export default function footerModelUnderCwd(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     ctx.ui.setFooter((tui, theme, footerData) => {
       const offBranch = footerData.onBranchChange(() => tui.requestRender());
-      const offCodexUsage = onCodexUsageChange(() => tui.requestRender());
+      const offCodexUsage = onCodexUsageChange(() => tui.requestRender(), pi.events);
 
       return {
         dispose() {

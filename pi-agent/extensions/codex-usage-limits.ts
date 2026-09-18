@@ -18,6 +18,7 @@ const CODEX_RESPONSES_PATH = "/codex/responses";
 const RATE_LIMIT_EVENT_TYPE = "codex.rate_limits";
 const MAX_SNIFFED_FRAME_BYTES = 8192;
 const CACHE_FILE = "codex-usage.json";
+const USAGE_CHANGED_EVENT = "codex-usage:changed";
 const WARN_PERCENT = 70;
 const CRITICAL_PERCENT = 90;
 
@@ -48,8 +49,8 @@ function cachePath(): string {
   return join(getAgentDir(), CACHE_FILE);
 }
 
-function loadSnapshot(): void {
-  if (snapshotLoaded) return;
+function loadSnapshot(force = false): void {
+  if (snapshotLoaded && !force) return;
   snapshotLoaded = true;
   try {
     const parsed = JSON.parse(readFileSync(cachePath(), "utf-8")) as CodexUsageSnapshot;
@@ -85,7 +86,18 @@ export function getCodexUsage(): CodexUsageSnapshot | undefined {
   return snapshot;
 }
 
-export function onCodexUsageChange(listener: Listener): () => void {
+export function onCodexUsageChange(
+  listener: Listener,
+  events?: ExtensionAPI["events"],
+): () => void {
+  if (events) {
+    loadSnapshot(true);
+    return events.on(USAGE_CHANGED_EVENT, (next: CodexUsageSnapshot) => {
+      snapshot = next;
+      snapshotLoaded = true;
+      listener();
+    });
+  }
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
@@ -305,6 +317,16 @@ function formatDetails(): string {
 export default function codexUsageLimits(pi: ExtensionAPI): void {
   installSniffers();
   loadSnapshot();
+
+  let offPublish: (() => void) | undefined;
+  pi.on("session_start", () => {
+    offPublish?.();
+    offPublish = onCodexUsageChange(() => pi.events.emit(USAGE_CHANGED_EVENT, snapshot));
+  });
+  pi.on("session_shutdown", () => {
+    offPublish?.();
+    offPublish = undefined;
+  });
 
   // Covers the SSE transport even when another extension replaced global fetch.
   pi.on("after_provider_response", (event) => {
