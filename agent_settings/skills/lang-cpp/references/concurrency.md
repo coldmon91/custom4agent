@@ -41,6 +41,59 @@ semantics table is kept literal — the meaning of each ordering is the informat
   or condition variables. `condition_variable::wait` always takes a predicate (spurious wakeups).
 - `std::jthread` (C++20) over `std::thread` — auto-joins, supports `stop_token`.
 
+## Compile-Time Lock Discipline
+
+Why this over a naming or review convention: with diamond inheritance, typedef renaming, or
+heavy templates, "is this member shared?" is not answerable at the use site. Let the compiler
+answer it.
+
+- **Lock owns the data** — first choice. No API hands out `T&` without a lock, so omitting the
+  lock is a compile error, not a warning. Same mechanism as Rust's `Mutex<T>`, and it holds no
+  matter how tangled the surrounding types are.
+
+  ```cpp
+  // Owns the data it protects: the value is unreachable without acquiring the lock.
+  template <typename T, typename Mutex = std::mutex>
+  class Synchronized {
+  public:
+      template <typename... Args>
+      explicit Synchronized(Args&&... args) : value_(std::forward<Args>(args)...) {}
+
+      class Guard {
+      public:
+          Guard(Mutex& mutex, T& value) : lock_(mutex), value_(value) {}
+          T* operator->() { return &value_; }
+          T& operator*() { return value_; }
+      private:
+          std::unique_lock<Mutex> lock_;
+          T& value_;
+      };
+
+      [[nodiscard]] Guard lock() { return Guard(mutex_, value_); }
+
+  private:
+      Mutex mutex_;
+      T value_;
+  };
+  ```
+
+  Ready-made: `folly::Synchronized`, `absl::Mutex`-guarded types.
+  Limit: a reference taken out of the guard (`auto& r = *g;`) outliving it is not caught —
+  C++ has no borrow checker.
+
+- **`-Wthread-safety` + `GUARDED_BY`** — for members that cannot be wrapped. Gotchas:
+  - `std::mutex` is **not** annotated. The analysis needs a `CAPABILITY("mutex")` wrapper
+    (Clang docs ship a `mutex.h` example) or `absl::Mutex`. The flag alone checks nothing.
+  - Strictly intraprocedural, no inlining — `REQUIRES` must be written at each boundary.
+  - No pointer alias tracking; no checks inside constructors/destructors; false positives on
+    conditionally-held locks.
+  - Template / virtual-inheritance behavior is undocumented — pilot before relying on it.
+  - `ACQUIRED_BEFORE` / `ACQUIRED_AFTER` bring lock ordering under the same check.
+
+- **ThreadSanitizer in CI** — the net for what the above misses. No annotation, no type tracing,
+  so it runs on untouched legacy code. Runtime only: it sees executed paths, so coverage is the
+  ceiling. Cost ~5 ~ 15x time, ~5 ~ 10x memory.
+
 ## Async & Coroutines
 
 - `std::async(std::launch::async, ...)` for one-off async; `std::promise`/`future` to hand a

@@ -19,4 +19,9 @@ description: Read when writing OR modifying code - including edits, refactoring,
 
 ## Multi-Thread Programming
 
-- Marking of shared resources, plus synchronization of all access to them.
+- Shared mutable state belongs in a lock-owning wrapper, so unlocked access cannot compile —
+  not a bare member plus a separate mutex, which relies on the editor noticing the pairing.
+- Never infer thread-safety from a name, or from a declaration you have not actually resolved.
+  With deep inheritance, typedef chains, or heavy templates, tracing the type is unreliable —
+  make the compiler or a sanitizer answer instead.
+- C++ -> `lang-cpp/references/concurrency.md`; Go -> `lang-go/references/concurrency.md`

@@ -43,6 +43,37 @@ For detailed channel/select code examples, see [Channels and Select Patterns](re
 | Many readers, few writers on a map | `sync.Map` | Optimized for read-heavy workloads. **Concurrent map read/write causes a hard crash** |
 | Caching expensive computations | `sync.Once` / `singleflight` | Execute once or deduplicate |
 
+## Making Shared State Un-missable
+
+Go has no compile-time lock checking — no `GUARDED_BY` equivalent. Nothing fails the build when
+a caller touches shared state unlocked, so the defense has to be encapsulation plus `-race`.
+
+- **Unexported field + locking methods** — first choice. Outside the type, unlocked access is
+  impossible; inside it, the critical code is one small file a reader sees whole.
+
+  ```go
+  type sessions struct {
+      mu sync.Mutex // guards m
+      m  map[SessionID]*Session
+  }
+
+  func (s *sessions) Insert(id SessionID, v *Session) {
+      s.mu.Lock()
+      defer s.mu.Unlock()
+      s.m[id] = v
+  }
+  ```
+
+- **Declare the mutex directly above the fields it guards, and say which ones**
+  (`mu sync.Mutex // guards conns, closed`) — the struct definition is the first thing read, so
+  the pairing travels with the declaration. This is the standard-library convention.
+- **Package-level state: name the lock after the data** (`cacheMu` guards `cache`) so the guard
+  is greppable from the data. Never the reverse — do not suffix the data.
+- A `Guarded[T]` wrapper with `With(func(*T))` makes the lock visible at the use site, but a
+  pointer can still escape the closure — weaker than the C++ guard, so prefer methods.
+- `go test -race ./...` in CI is the real net, and `go vet` copylocks catches copied mutexes.
+  `-race` is runtime only: it sees executed paths, so test coverage is the ceiling.
+
 ## WaitGroup vs errgroup
 
 | Need | Use | Why |

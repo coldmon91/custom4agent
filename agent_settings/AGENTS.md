@@ -38,10 +38,22 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Comments in English; explain only core logic (no diff/change notes)
 - Code principles: clean/meaningful naming, optimal time & space, thorough error handling, brief rationale after writing, secure coding
 - Reuse common behavior via functions/methods/modules
+
+### Naming and Commenting
+- Name functions and variables so the intent is visible in the name itself
+- If the name alone cannot convey the intent, supplement it with a comment
+- If the name already conveys the intent, add no explanatory comment for it
 - State the next tasks when work remains
 
 ### C++
 - Braces on all if statements; modern C++ (17+); RAII where possible
+- Shared mutable state goes in a lock-owning wrapper (unlocked access must not compile),
+  never a bare member plus a separate mutex
+
+### Go
+- Encapsulate shared state: unexported fields plus methods that lock, so callers cannot reach
+  it unlocked; declare the mutex directly above the fields it guards and name them
+- `go test -race ./...` in CI is the only real net — Go has no compile-time lock checking
 
 ### Rust
 - No `unwrap`/`expect` in prod (use Result/Option); OK in tests when intent is clear
