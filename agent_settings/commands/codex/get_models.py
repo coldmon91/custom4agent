@@ -42,19 +42,26 @@ ROLE_BORROW_ORDER = {
 TIER_POLICY = {
     "agent": (
         ("fast", "medium"),
-        ("balanced", "high"),
+        ("fast", "xhigh"),
         ("deep", "high"),
         ("deep", "xhigh"),
     ),
     "review": (
         ("fast", "medium"),
-        ("balanced", "medium"),
+        ("fast", "xhigh"),
         ("deep", "high"),
         ("deep", "xhigh"),
     ),
 }
 
 VERSION_PATTERN = re.compile(r"(\d+(?:\.\d+)?)")
+
+# Codex folds `model_catalog_json` and any local `openai_base_url` provider into the
+# same catalog, so `codex debug models` can list Ollama or other third-party models.
+# Tier resolution must stay inside OpenAI's own lineup, and the slug is the only
+# vendor marker the catalog carries. `:` is Ollama's `name:tag` separator, which no
+# Codex slug uses, so it rejects a locally served `gpt-oss:20b` as well.
+VENDOR_PREFIXES = ("gpt", "codex")
 
 
 def die(message: str) -> NoReturn:
@@ -101,8 +108,16 @@ def load_models(source: str | None, timeout: float) -> list[dict]:
     return [model for model in data["models"] if isinstance(model, dict)]
 
 
+def is_vendor_model(model: dict) -> bool:
+    slug = model.get("slug", "").lower()
+    return slug.startswith(VENDOR_PREFIXES) and ":" not in slug
+
+
 def is_usable(model: dict) -> bool:
-    return model.get("visibility") == "list" and model.get("supported_in_api") is True
+    # `supported_in_api` is deliberately not consulted: a catalog override reports it
+    # as false even for the model `config.toml` runs by default, which would empty
+    # the pool. `visibility` plus the vendor prefix is the reliable pair.
+    return model.get("visibility") == "list" and is_vendor_model(model)
 
 
 def is_current(model: dict) -> bool:
@@ -276,7 +291,10 @@ def main() -> None:
 
     usable = [model for model in load_models(args.from_file, args.timeout) if is_usable(model)]
     if not usable:
-        die("`codex debug models` reported no usable models")
+        die(
+            "`codex debug models` reported no usable OpenAI model; check "
+            "`model_catalog_json` and `openai_base_url` in ~/.codex/config.toml"
+        )
 
     if args.all:
         pool = usable if args.include_deprecated else [m for m in usable if is_current(m)]
