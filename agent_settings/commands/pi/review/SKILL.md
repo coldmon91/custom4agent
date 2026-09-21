@@ -116,9 +116,12 @@ Always include `[제약]`.
 4. Announce the resolved choice in one line, including the literal `provider/id` slug and level.
 5. Build the command, substituting the literal resolved slug for `<model>` (no `$VAR` references):
    ```bash
-   pi -p --no-session --no-approve --tools read,grep,find,ls \
+   pi -p --no-session --no-approve --tool-mode read \
+     --tools read,grep,find,ls \
      --model <model> --thinking <level>
    ```
+   `--tool-mode read` matches this skill's read-only intent and keeps the run off the auto-mode
+   screener entirely, so a review costs no classifier calls.
 6. Start the command and send the complete assembled prompt through the execution tool's raw stdin
    input facility, then close stdin. Do not construct a shell pipeline or place any prompt text in
    the command string.

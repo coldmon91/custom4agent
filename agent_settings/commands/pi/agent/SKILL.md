@@ -128,9 +128,13 @@ Always include `[제약]`.
 5. Record the pre-run state with `git status --short` so the post-run diff can be attributed.
 6. Build the command, substituting the literal resolved slug for `<model>` (no `$VAR` references):
    ```bash
-   pi -p --no-session --no-approve --tools read,grep,find,ls,edit,write,bash \
+   pi -p --no-session --no-approve --tool-mode write \
+     --tools read,grep,find,ls,edit,write,bash \
      --model <model> --thinking <level>
    ```
+   `--tool-mode write` is required: the default `auto` mode screens non-read-only calls and a
+   print-mode run has no UI to approve one, so a screened call would be refused outright with no
+   recourse. Step 9's diff review is what bounds the delegated run instead.
 7. Start the command and send the complete assembled prompt through the execution tool's raw stdin
    input facility, then close stdin. Do not construct a shell pipeline or place any prompt text in
    the command string.

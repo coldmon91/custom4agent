@@ -1,0 +1,30 @@
+{
+  "_readme": [
+    "Auto-mode screener settings. Edited here, applied on the next screened call — no restart, no /reload.",
+    "models: tried in order, first one that exists with configured auth wins. Format 'provider/modelId'.",
+    "  The modelId may itself contain slashes, e.g. together/openai/gpt-oss-120b.",
+    "  When none resolve, the gate falls back to the session's own model.",
+    "reasoning: off | minimal | low | medium | high | xhigh | max.",
+    "timeoutMs: give up on a screener call after this long; the gate then asks the user (or blocks with no UI).",
+    "Run /automode to see which model is actually in use."
+  ],
+  "_measured": [
+    "Six cases x three trials, via the Together API with this gate's own ruleset prompt:",
+    "  together/openai/gpt-oss-120b                16/18 - caught every deny case; over-blocked one user-named reset",
+    "  together/deepseek-ai/DeepSeek-V4-Flash-0731  5/6  - allowed 'curl | bash'",
+    "  together/deepseek-ai/DeepSeek-V4.1-Flash    15/18 - allowed 'curl | bash' 2 of 3, and costs 2x the leader",
+    "  together/Qwen/Qwen3.5-9B                     9/18 - frequently unparseable JSON",
+    "  together/zai-org/GLM-5.3-Flash               3/6  - frequently unparseable JSON",
+    "Keeping the screener off the session's own provider is deliberate: one provider's",
+    "outage would otherwise stall the session and the gate together, and a gate that",
+    "cannot answer refuses every screened call.",
+    "Not usable on this account (Together requires a dedicated endpoint): openai/gpt-oss-20b,",
+    "Qwen/Qwen2.5-7B-Instruct-Turbo, MiniMaxAI/MiniMax-M2.7, google/gemma-4-31B-it."
+  ],
+  "models": [
+    "together/openai/gpt-oss-120b",
+    "together/deepseek-ai/DeepSeek-V4-Flash-0731"
+  ],
+  "reasoning": "low",
+  "timeoutMs": 20000
+}
