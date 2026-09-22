@@ -1,0 +1,15 @@
+{
+  "_readme": [
+    "Directories auto mode treats like the working directory: edits and shell writes",
+    "landing inside one skip the screener. Edited here, applied on the next call.",
+    "The working directory of the session is always trusted and needs no entry.",
+    "Entries must be absolute; '~/...' and '$TMPDIR' are expanded, nothing else is.",
+    "Symlinks are resolved before the check, so a link out of a root does not widen it.",
+    "Files that look like credentials (auth.json, .env, id_rsa, .ssh/…) are screened",
+    "wherever they live — a root does not cover them."
+  ],
+  "roots": [
+    "~/.pi/agent",
+    "$TMPDIR"
+  ]
+}

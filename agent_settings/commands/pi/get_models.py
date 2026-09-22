@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve pi tiers to (provider/model, thinking level) from the pi model catalog."""
+"""List the models pi can actually reach, with pricing, context, and thinking levels."""
 
 from __future__ import annotations
 
@@ -15,26 +15,6 @@ from typing import NoReturn
 
 # pi's own level ladder, weakest to strongest (see `getSupportedThinkingLevels` in pi-ai).
 THINKING_LEVELS = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
-
-# Ordered strongest to weakest. Role names stay stable even when model names do not.
-ROLES = ("deep", "balanced", "fast")
-
-# Tier -> (role, requested thinking level). The level is a ceiling, clamped down to
-# what the resolved model actually supports so pi's own upward clamp never fires.
-TIER_POLICY = {
-    "agent": (
-        ("fast", "medium"),
-        ("balanced", "high"),
-        ("deep", "high"),
-        ("deep", "xhigh"),
-    ),
-    "review": (
-        ("fast", "medium"),
-        ("balanced", "medium"),
-        ("deep", "high"),
-        ("deep", "xhigh"),
-    ),
-}
 
 SIZE_PATTERN = re.compile(r"^([\d.]+)([KM]?)$", re.IGNORECASE)
 SIZE_UNITS = {"": 1, "K": 1_000, "M": 1_000_000}
@@ -87,6 +67,14 @@ def parse_size(token: str) -> float:
     return float(match.group(1)) * SIZE_UNITS[match.group(2).upper()]
 
 
+def format_size(value: float) -> str:
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.2f}".rstrip("0").rstrip(".") + "M"
+    if value >= 1_000:
+        return f"{round(value / 1_000):g}K"
+    return f"{value:g}" if value else "-"
+
+
 def parse_listing(raw: str) -> list[dict]:
     """Parse `pi --list-models` rows. This listing is the availability gate: it only
     shows models the current credentials can actually reach."""
@@ -121,19 +109,6 @@ def supported_thinking(model: dict) -> list[str]:
             continue
         supported.append(level)
     return supported
-
-
-def clamp_thinking(requested: str, supported: list[str]) -> str | None:
-    """Clamp down to the strongest supported level at or below `requested`.
-
-    pi clamps upward first, which would silently raise cost, so the ceiling is
-    enforced here instead and pi receives a level it already supports.
-    """
-    ceiling = THINKING_LEVELS.index(requested)
-    return next(
-        (level for level in reversed(supported) if THINKING_LEVELS.index(level) <= ceiling),
-        None,
-    )
 
 
 def output_cost(model: dict) -> float:
@@ -185,7 +160,7 @@ def build_catalog(available: list[dict], store: dict | None) -> list[dict]:
             "no cached metadata for "
             + ", ".join(missing[:5])
             + (" ..." if len(missing) > 5 else "")
-            + "; ranked as lowest cost. Run `pi update` to refresh the catalog."
+            + "; listed with unknown pricing. Run `pi update` to refresh the catalog."
         )
     return catalog
 
@@ -213,95 +188,65 @@ def dedupe(catalog: list[dict], preference: dict[str, int]) -> list[dict]:
     return [{k: v for k, v in model.items() if k != "_rank"} for model in best.values()]
 
 
-def favorite_pool(config: Path, catalog: list[dict]) -> list[dict]:
+def favorite_keys(config: Path) -> set[tuple[str, str]]:
     store = read_json(config / "favorite-models.json", "favorite-models.json") or {}
-    wanted = {
+    return {
         (item.get("provider"), item.get("modelId"))
         for item in store.get("items") or []
         if isinstance(item, dict)
     }
-    return [model for model in catalog if (model["provider"], model["id"]) in wanted]
 
 
-def assign_roles(pool: list[dict]) -> tuple[dict[str, dict], list[str]]:
-    """Bind the strongest, median, and weakest model of the pool to the three roles."""
-    ranked = sorted(pool, key=strength, reverse=True)
-    if not ranked:
-        return {}, []
-
-    assigned = {
-        "deep": ranked[0],
-        "balanced": ranked[(len(ranked) - 1) // 2],
-        "fast": ranked[-1],
+def describe(model: dict, favorites: set[tuple[str, str]]) -> dict:
+    out = output_cost(model)
+    inp = input_cost(model)
+    return {
+        "model": model["slug"],
+        "input_cost": inp if inp >= 0 else None,
+        "output_cost": out if out >= 0 else None,
+        "context": int(model.get("contextWindow") or 0),
+        "thinking": supported_thinking(model),
+        "favorite": (model["provider"], model["id"]) in favorites,
     }
-    notes = []
-    if len(ranked) < 3:
-        collapsed = ", ".join(f"{role}={assigned[role]['slug']}" for role in ROLES)
-        notes.append(f"only {len(ranked)} model(s) to bind; roles overlap ({collapsed})")
-    return assigned, notes
 
 
-def resolve_pool(config: Path, catalog: list[dict]) -> tuple[list[dict], list[str]]:
-    favorites = favorite_pool(config, catalog)
-    if len(favorites) >= len(ROLES):
-        return favorites, []
-    if favorites:
-        note = (
-            f"only {len(favorites)} favorite model(s) available; "
-            "widened the pool to the full catalog"
+def format_table(rows: list[dict]) -> str:
+    """Fixed-width columns so a caller can read a row without splitting on whitespace
+    that also appears inside the thinking list."""
+    header = ("MODEL", "IN$/M", "OUT$/M", "CONTEXT", "FAV", "THINKING")
+
+    def cost(value: float | None) -> str:
+        return f"{value:g}" if value is not None else "-"
+
+    cells = [header] + [
+        (
+            row["model"],
+            cost(row["input_cost"]),
+            cost(row["output_cost"]),
+            format_size(row["context"]),
+            "*" if row["favorite"] else "",
+            ",".join(row["thinking"]),
         )
-    else:
-        note = "no favorite models available; using the full catalog"
-    return catalog, [note]
-
-
-def resolve_tiers(assigned: dict[str, dict], policy: tuple) -> list[dict]:
-    tiers = []
-    for number, (role, requested) in enumerate(policy, start=1):
-        model = assigned.get(role)
-        if model is None:
-            die(f"tier{number}: no available model could be bound to the `{role}` role")
-
-        supported = supported_thinking(model)
-        level = clamp_thinking(requested, supported)
-        if level is None:
-            die(f"tier{number}: {model['slug']} supports no thinking level at or below `{requested}`")
-
-        tiers.append({
-            "tier": number,
-            "role": role,
-            "model": model["slug"],
-            "thinking": level,
-            "supported_thinking": supported,
-        })
-    return tiers
-
-
-def format_tiers(tiers: list[dict]) -> str:
+        for row in rows
+    ]
+    widths = [max(len(row[i]) for row in cells) for i in range(len(header))]
     return "\n".join(
-        line
-        for tier in tiers
-        for line in (
-            f"tier{tier['tier']}_model={tier['model']}",
-            f"tier{tier['tier']}_thinking={tier['thinking']}",
-            f"tier{tier['tier']}_supported_thinking={','.join(tier['supported_thinking'])}",
-        )
+        "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in cells
     )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Resolve pi tier models and thinking levels.")
+    parser = argparse.ArgumentParser(description="List the models pi can currently use.")
+    parser.add_argument("--json", action="store_true", help="emit the model list as JSON")
     parser.add_argument(
-        "--profile",
-        choices=sorted(TIER_POLICY),
-        default="agent",
-        help="tier policy to apply (default: agent)",
-    )
-    parser.add_argument("--json", action="store_true", help="emit the tier table as JSON")
-    parser.add_argument(
-        "--all",
+        "--favorites",
         action="store_true",
-        help="list available `provider/model` slugs instead of the tier table",
+        help="list only the models in favorite-models.json",
+    )
+    parser.add_argument(
+        "--slugs",
+        action="store_true",
+        help="print bare `provider/model` slugs, one per line",
     )
     parser.add_argument(
         "--from-file",
@@ -331,18 +276,19 @@ def main() -> None:
     if not catalog:
         die("no model survived the availability join; run `pi update` and check `pi auth check`")
 
-    if args.all:
-        for model in sorted(catalog, key=strength, reverse=True):
-            print(model["slug"])
-        return
+    favorites = favorite_keys(config)
+    rows = [describe(model, favorites) for model in sorted(catalog, key=strength, reverse=True)]
+    if args.favorites:
+        rows = [row for row in rows if row["favorite"]]
+        if not rows:
+            die("no favorite model is currently reachable; drop --favorites or run `pi auth check`")
 
-    pool, notes = resolve_pool(config, catalog)
-    assigned, role_notes = assign_roles(pool)
-    for note in notes + role_notes:
-        warn(note)
-
-    tiers = resolve_tiers(assigned, TIER_POLICY[args.profile])
-    print(json.dumps(tiers, indent=2) if args.json else format_tiers(tiers))
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    elif args.slugs:
+        print("\n".join(row["model"] for row in rows))
+    else:
+        print(format_table(rows))
 
 
 if __name__ == "__main__":

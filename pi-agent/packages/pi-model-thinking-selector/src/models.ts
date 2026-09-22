@@ -27,16 +27,28 @@ export type RecentModelStore = {
   items: RecentModelEntry[];
 };
 
-export type ModelItem = {
+type ModelItemBase = {
   provider: string;
   modelId: string;
-  model: Model<Api>;
   isFavorite: boolean;
   isRecent: boolean;
 };
 
+export type AvailableModelItem = ModelItemBase & {
+  model: Model<Api>;
+  isAvailable: true;
+};
+
+export type UnavailableModelItem = ModelItemBase & {
+  model: Model<Api> | undefined;
+  isAvailable: false;
+};
+
+export type ModelItem = AvailableModelItem | UnavailableModelItem;
+
 export type SelectableModelData = {
-  allModels: Model<Api>[];
+  catalogModels: Model<Api>[];
+  availableModels: Model<Api>[];
   recentKeys: string[];
 };
 

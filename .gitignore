@@ -1,4 +1,5 @@
 # Sensitive / personal data — never commit
+config/zed/settings.json
 auth.json
 trust.json
 sessions/

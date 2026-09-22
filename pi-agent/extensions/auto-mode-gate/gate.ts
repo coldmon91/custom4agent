@@ -2,7 +2,7 @@
  * The auto-mode permission gate.
  *
  * Reproduces Claude Code's auto-mode decision order for pi:
- *   1. read-only work and in-directory edits are approved without a model call
+ *   1. read-only work and writes inside a trusted root are approved without a model call
  *   2. everything else is judged by a classifier against the auto-mode ruleset
  *   3. `soft_deny` asks the user, `hard_deny` is refused outright
  *
@@ -14,8 +14,9 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ClassifierUnavailableError, classify, resolveClassifierModel } from "./classifier.ts";
 import { getClassifierConfig, getClassifierConfigPath } from "./classifier-config.ts";
-import { isAutoApproved } from "./fast-path.ts";
+import { isAutoApproved, trustedRootsFor } from "./fast-path.ts";
 import { getClassifierSystemPrompt, renderTrustBoundary } from "./ruleset.ts";
+import { getTrustedRoots, getTrustedRootsPath } from "./trusted-roots.ts";
 import { buildClassifierRequest } from "./transcript.ts";
 import { captureTrustBoundary } from "./trust-boundary.ts";
 import type { GateDecision, PendingAction, TrustBoundary } from "./types.ts";
@@ -85,15 +86,26 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
     describeConfig(ctx) {
       const config = getClassifierConfig();
       const chain = config.models.map((m) => `${m.provider}/${m.modelId}`).join(" → ");
+      const trusted = getTrustedRoots();
+      const roots = [ctx.cwd, ...trusted.directories].join("\n           ");
       const lines = [
         `in use:    ${this.describeClassifier(ctx)}`,
         `chain:     ${chain}`,
         `reasoning: ${config.reasoning}    timeout: ${config.timeoutMs}ms`,
         `config:    ${getClassifierConfigPath()}`,
+        "",
+        "Skipping the screener entirely: read-only tools, read-only shell commands,",
+        "and writes landing in a trusted root.",
+        `roots:     ${roots}`,
+        `           (${getTrustedRootsPath()})`,
       ];
 
       if (config.problems.length > 0) {
         lines.push(...config.problems.map((problem) => `problem:   ${problem}`));
+      }
+
+      if (trusted.problems.length > 0) {
+        lines.push(...trusted.problems.map((problem) => `problem:   ${problem}`));
       }
 
       return lines.join("\n");
@@ -101,9 +113,10 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
 
     async evaluate(action, ctx) {
       const activeBoundary = await boundaryFor(ctx);
+      const roots = trustedRootsFor(activeBoundary);
 
-      if (isAutoApproved(action, activeBoundary)) {
-        return { outcome: "allow", rule: "Read-Only / In-Directory" };
+      if (isAutoApproved(action, activeBoundary, roots)) {
+        return { outcome: "allow", rule: "Read-Only / Trusted Root" };
       }
 
       let result;
@@ -111,7 +124,11 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
         result = await classify(
           ctx,
           getClassifierSystemPrompt(),
-          buildClassifierRequest(ctx, action, renderTrustBoundary(activeBoundary)),
+          buildClassifierRequest(
+            ctx,
+            action,
+            renderTrustBoundary(activeBoundary, roots),
+          ),
         );
       } catch (error) {
         const detail =

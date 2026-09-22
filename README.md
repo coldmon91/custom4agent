@@ -24,6 +24,11 @@ pi-agent/
 │   └── pi-model-thinking-selector/
 ├── prompts                # ../agent_settings/commands 심볼릭 링크
 └── skills                 # ../agent_settings/skills 심볼릭 링크
+
+config/
+├── ghostty/config         # Ghostty 터미널 설정
+├── wezterm/wezterm.lua    # WezTerm 터미널 설정
+└── zed/keymap.json        # Zed 키 바인딩
 ```
 
 ## 주요 구성 요소
@@ -33,6 +38,7 @@ pi-agent/
 - `agent_settings/skills`: 아키텍처·영향·로그·원인 분석, 디버깅, 브라우저 자동화, 언어별 개발, 문서화 및 작업 계획 스킬
 - `pi-agent/extensions`: 모델·추론 수준 선택, 도구 모드 전환, 상태 표시, 세션 사용량 확인 등의 Pi 확장
 - `pi-agent/packages/pi-model-thinking-selector`: 모델 검색, 즐겨찾기, 최근 모델 및 모델별 추론 수준 선택 기능을 제공하는 npm 패키지
+- `config`: 홈 디렉터리의 개발 도구 설정 원본. `~/.config/{wezterm,zed,ghostty}` 및 Ghostty의 Application Support 경로가 이 파일들을 심볼릭 링크로 참조
 
 ## 로컬 데이터 및 제외 항목
 
@@ -42,4 +48,5 @@ pi-agent/
 - Pi 로컬 상태: `pi-agent/settings.json`, `pi-agent/recent-models.json`, `pi-agent/models-store.json`, `pi-agent/favorite-models.json`
 - 로컬 전용 스킬과 시스템 데이터: `agent_settings/skills/my-*`, `agent_settings/skills/.system`
 - npm 생성 결과물: `pi-agent/packages/*/node_modules/`, 패키지 압축 파일(`*.tgz`)
+- API 키가 포함된 로컬 설정: `config/zed/settings.json` (원본은 `~/.config/zed/settings.json`에만 유지)
 - 운영체제·Python 생성 파일: `.DS_Store`, `__pycache__/`

@@ -48,8 +48,10 @@ Inside the picker:
 | `Enter` | Apply the model and effort |
 | `Esc` | Clear the filter, or cancel when it is already empty |
 
-The list is grouped as **Favorite models**, **Recent models**, then **All models**. Only
-models with configured auth are listed. `●` marks the active model, `★` marks a favorite.
+The list is grouped as **Favorite models**, **Recent models**, then **All models**. General
+and recent groups contain only models with configured auth. Unavailable favorites remain visible
+with an `unavailable` label so you can highlight them and press `Space` to remove them. They keep
+their favorite slot until removed. `●` marks the active model, `★` marks a favorite.
 
 Effort is clamped to what the highlighted model actually supports, so the picker shows both
 the requested level and the effective one (`high → medium`) when they differ. Models without

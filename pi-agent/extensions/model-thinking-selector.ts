@@ -51,16 +51,28 @@ let recentModelsWriteQueue: Promise<void> = Promise.resolve();
 // ~/.pi/agent/settings.json is also shared; serialize writes for the same reason.
 let globalSettingsWriteQueue: Promise<void> = Promise.resolve();
 
-type ModelItem = {
+type ModelItemBase = {
   provider: string;
   modelId: string;
-  model: Model<Api>;
   isFavorite: boolean;
   isRecent: boolean;
 };
 
+type AvailableModelItem = ModelItemBase & {
+  model: Model<Api>;
+  isAvailable: true;
+};
+
+type UnavailableModelItem = ModelItemBase & {
+  model: Model<Api> | undefined;
+  isAvailable: false;
+};
+
+type ModelItem = AvailableModelItem | UnavailableModelItem;
+
 type SelectableModelData = {
-  allModels: Model<Api>[];
+  catalogModels: Model<Api>[];
+  availableModels: Model<Api>[];
   recentKeys: string[];
 };
 
@@ -244,44 +256,71 @@ async function getRecentModelKeys(ctx: ExtensionContext): Promise<string[]> {
 }
 
 async function getSelectableModelData(ctx: ExtensionContext): Promise<SelectableModelData> {
-  const allModels = ctx.modelRegistry
-    .getAll()
-    .filter((model) => ctx.modelRegistry.hasConfiguredAuth(model))
-    .sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
+  const catalogModels = [...ctx.modelRegistry.getAll()].sort(
+    (a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id),
+  );
+  const availableModels = catalogModels.filter((model) =>
+    ctx.modelRegistry.hasConfiguredAuth(model),
+  );
 
-  return { allModels, recentKeys: await getRecentModelKeys(ctx) };
+  return { catalogModels, availableModels, recentKeys: await getRecentModelKeys(ctx) };
 }
 
 function buildSelectableModels(data: SelectableModelData, favoriteStore: FavoriteModelStore): ModelItem[] {
-  const byKey = new Map(data.allModels.map((model) => [getModelKey(model.provider, model.id), model] as const));
+  const catalogByKey = new Map(
+    data.catalogModels.map((model) => [getModelKey(model.provider, model.id), model] as const),
+  );
+  const availableByKey = new Map(
+    data.availableModels.map((model) => [getModelKey(model.provider, model.id), model] as const),
+  );
   const favoriteKeys = favoriteStore.items.map((item) => getModelKey(item.provider, item.modelId));
   const favoriteSet = new Set(favoriteKeys);
   const recentKeys = data.recentKeys.filter((key) => !favoriteSet.has(key));
   const recentSet = new Set(recentKeys);
 
-  const toItem = (model: Model<Api>, isFavorite: boolean, isRecent: boolean): ModelItem => ({
+  const toAvailableItem = (
+    model: Model<Api>,
+    isFavorite: boolean,
+    isRecent: boolean,
+  ): ModelItem => ({
     provider: model.provider,
     modelId: model.id,
     model,
+    isAvailable: true,
     isFavorite,
     isRecent,
   });
 
+  const favoriteItems: ModelItem[] = favoriteStore.items.map((entry) => {
+    const key = getModelKey(entry.provider, entry.modelId);
+    const availableModel = availableByKey.get(key);
+    if (availableModel) return toAvailableItem(availableModel, true, false);
+
+    return {
+      provider: entry.provider,
+      modelId: entry.modelId,
+      model: catalogByKey.get(key),
+      isAvailable: false,
+      isFavorite: true,
+      isRecent: false,
+    };
+  });
+
+  const pickAvailable = (keys: string[], isRecent: boolean): ModelItem[] =>
+    keys
+      .map((key) => availableByKey.get(key))
+      .filter((model): model is Model<Api> => Boolean(model))
+      .map((model) => toAvailableItem(model, false, isRecent));
+
   return [
-    ...favoriteKeys
-      .map((key) => byKey.get(key))
-      .filter((model): model is Model<Api> => Boolean(model))
-      .map((model) => toItem(model, true, false)),
-    ...recentKeys
-      .map((key) => byKey.get(key))
-      .filter((model): model is Model<Api> => Boolean(model))
-      .map((model) => toItem(model, false, true)),
-    ...data.allModels
+    ...favoriteItems,
+    ...pickAvailable(recentKeys, true),
+    ...data.availableModels
       .filter((model) => {
         const key = getModelKey(model.provider, model.id);
         return !favoriteSet.has(key) && !recentSet.has(key);
       })
-      .map((model) => toItem(model, false, false)),
+      .map((model) => toAvailableItem(model, false, false)),
   ];
 }
 
@@ -343,7 +382,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
         models.findIndex((item) => getModelKey(item.provider, item.modelId) === currentModelKey),
       );
 
-      const result = await ctx.ui.custom<{ model: ModelItem; thinking: ThinkingLevel } | null>(
+      const result = await ctx.ui.custom<{ model: AvailableModelItem; thinking: ThinkingLevel } | null>(
         (tui, theme, _kb, done) => {
           let modelIndex = initialIndex;
           let thinkingIndex = Math.max(0, THINKING_LEVELS.indexOf(normalizeThinkingLevel(pi.getThinkingLevel())));
@@ -374,7 +413,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             if (tokens.length === 0) return models;
 
             return models.filter((item) => {
-              const haystack = `${item.provider} ${item.modelId} ${item.model.name}`.toLowerCase();
+              const haystack = `${item.provider} ${item.modelId} ${item.model?.name ?? ""}`.toLowerCase();
               return tokens.every((token) => haystack.includes(token));
             });
           }
@@ -475,9 +514,10 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               return;
             }
             if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) {
-              const selectedModel = visibleModels[modelIndex]?.model;
-              if (!selectedModel?.reasoning) return;
+              const selectedItem = visibleModels[modelIndex];
+              if (!selectedItem?.isAvailable || !selectedItem.model.reasoning) return;
 
+              const selectedModel = selectedItem.model;
               const supportedLevels = getSupportedThinkingLevels(selectedModel);
               if (supportedLevels.length === 0) return;
 
@@ -505,12 +545,15 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             if (matchesKey(data, Key.enter)) {
               clampModelIndex();
               const selected = getVisibleModels()[modelIndex];
-              if (selected) {
-                done({
-                  model: selected,
-                  thinking: clampThinkingLevel(selected.model, THINKING_LEVELS[thinkingIndex]),
-                });
+              if (!selected) return;
+              if (!selected.isAvailable) {
+                ctx.ui.notify("Unavailable favorite model; press Space to remove it", "warning");
+                return;
               }
+              done({
+                model: selected,
+                thinking: clampThinkingLevel(selected.model, THINKING_LEVELS[thinkingIndex]),
+              });
               return;
             }
             if (matchesKey(data, Key.escape)) {
@@ -548,7 +591,8 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             };
             const visibleModels = getVisibleModels();
             clampModelIndex();
-            const selectedModel = visibleModels[modelIndex]?.model;
+            const selectedItem = visibleModels[modelIndex];
+            const selectedModel = selectedItem?.isAvailable ? selectedItem.model : undefined;
             const requestedThinking = THINKING_LEVELS[thinkingIndex];
             const effectiveThinking = selectedModel
               ? clampThinkingLevel(selectedModel, requestedThinking)
@@ -592,12 +636,24 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
               const isCurrent = getModelKey(item.provider, item.modelId) === currentModelKey;
               const prefix = selected ? theme.fg("accent", "> ") : "  ";
               const favoriteMark = item.isFavorite ? "★ " : "  ";
-              const baseLabel = `${isCurrent ? "● " : "  "}${favoriteMark}${formatModelLabel(item.model)}`;
-              const labelColor = selected ? "accent" : isCurrent ? "success" : "text";
-              const effortSuffix = selected
+              const modelLabel = item.model
+                ? formatModelLabel(item.model)
+                : `${item.provider}/${item.modelId}`;
+              const baseLabel = `${isCurrent ? "● " : "  "}${favoriteMark}${modelLabel}`;
+              const labelColor = !item.isAvailable
+                ? "muted"
+                : selected
+                  ? "accent"
+                  : isCurrent
+                    ? "success"
+                    : "text";
+              const availabilitySuffix = item.isAvailable
+                ? ""
+                : theme.fg("warning", " · unavailable");
+              const effortSuffix = selected && item.isAvailable
                 ? renderEffortSuffix(item.model, requestedThinking, effectiveThinking)
                 : "";
-              const label = `${theme.fg(labelColor, baseLabel)}${effortSuffix}`;
+              const label = `${theme.fg(labelColor, baseLabel)}${availabilitySuffix}${effortSuffix}`;
               const prefixWidth = visibleWidth(prefix);
               if (prefixWidth >= renderWidth) {
                 pushWrappedLine(`${prefix}${label}`);
@@ -610,7 +666,11 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             }
 
             lines.push("");
-            if (selectedModel && !selectedModel.reasoning) {
+            if (selectedItem && !selectedItem.isAvailable) {
+              pushWrappedLine(
+                theme.fg("warning", "* This favorite model is unavailable; press Space to remove it."),
+              );
+            } else if (selectedModel && !selectedModel.reasoning) {
               pushWrappedLine(
                 theme.fg("warning", "* This model does not support reasoning; effort selection is disabled."),
               );

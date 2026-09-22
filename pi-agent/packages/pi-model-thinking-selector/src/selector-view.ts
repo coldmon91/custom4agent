@@ -10,6 +10,7 @@ import {
   getModelKey,
   normalizeThinkingLevel,
   THINKING_LEVELS,
+  type AvailableModelItem,
   type FavoriteModelStore,
   type ModelItem,
   type SelectableModelData,
@@ -17,7 +18,7 @@ import {
 } from "./models";
 import { thinkingColor } from "./thinking-colors";
 
-export type SelectorResult = { model: ModelItem; thinking: ThinkingLevel };
+export type SelectorResult = { model: AvailableModelItem; thinking: ThinkingLevel };
 
 export type SelectorViewOptions = {
   ctx: ExtensionContext;
@@ -80,7 +81,7 @@ export async function showModelSelector(options: SelectorViewOptions): Promise<S
       if (tokens.length === 0) return models;
 
       return models.filter((item) => {
-        const haystack = `${item.provider} ${item.modelId} ${item.model.name}`.toLowerCase();
+        const haystack = `${item.provider} ${item.modelId} ${item.model?.name ?? ""}`.toLowerCase();
         return tokens.every((token) => haystack.includes(token));
       });
     }
@@ -179,9 +180,10 @@ export async function showModelSelector(options: SelectorViewOptions): Promise<S
         return;
       }
       if (matchesKey(data, Key.left) || matchesKey(data, Key.right)) {
-        const selectedModel = visibleModels[modelIndex]?.model;
-        if (!selectedModel?.reasoning) return;
+        const selectedItem = visibleModels[modelIndex];
+        if (!selectedItem?.isAvailable || !selectedItem.model.reasoning) return;
 
+        const selectedModel = selectedItem.model;
         const supportedLevels = getSupportedThinkingLevels(selectedModel);
         if (supportedLevels.length === 0) return;
 
@@ -209,12 +211,15 @@ export async function showModelSelector(options: SelectorViewOptions): Promise<S
       if (matchesKey(data, Key.enter)) {
         clampModelIndex();
         const selected = getVisibleModels()[modelIndex];
-        if (selected) {
-          done({
-            model: selected,
-            thinking: clampThinkingLevel(selected.model, THINKING_LEVELS[thinkingIndex]),
-          });
+        if (!selected) return;
+        if (!selected.isAvailable) {
+          ctx.ui.notify("Unavailable favorite model; press Space to remove it", "warning");
+          return;
         }
+        done({
+          model: selected,
+          thinking: clampThinkingLevel(selected.model, THINKING_LEVELS[thinkingIndex]),
+        });
         return;
       }
       if (matchesKey(data, Key.escape)) {
@@ -256,7 +261,8 @@ export async function showModelSelector(options: SelectorViewOptions): Promise<S
       };
       const visibleModels = getVisibleModels();
       clampModelIndex();
-      const selectedModel = visibleModels[modelIndex]?.model;
+      const selectedItem = visibleModels[modelIndex];
+      const selectedModel = selectedItem?.isAvailable ? selectedItem.model : undefined;
       const requestedThinking = THINKING_LEVELS[thinkingIndex];
       const effectiveThinking = selectedModel
         ? clampThinkingLevel(selectedModel, requestedThinking)
@@ -302,12 +308,24 @@ export async function showModelSelector(options: SelectorViewOptions): Promise<S
         const isCurrent = getModelKey(item.provider, item.modelId) === currentModelKey;
         const prefix = selected ? theme.fg("accent", "> ") : "  ";
         const favoriteMark = item.isFavorite ? "★ " : "  ";
-        const baseLabel = `${isCurrent ? "● " : "  "}${favoriteMark}${formatModelLabel(item.model)}`;
-        const labelColor = selected ? "accent" : isCurrent ? "success" : "text";
-        const effortSuffix = selected
+        const modelLabel = item.model
+          ? formatModelLabel(item.model)
+          : `${item.provider}/${item.modelId}`;
+        const baseLabel = `${isCurrent ? "● " : "  "}${favoriteMark}${modelLabel}`;
+        const labelColor = !item.isAvailable
+          ? "muted"
+          : selected
+            ? "accent"
+            : isCurrent
+              ? "success"
+              : "text";
+        const availabilitySuffix = item.isAvailable
+          ? ""
+          : theme.fg("warning", " · unavailable");
+        const effortSuffix = selected && item.isAvailable
           ? renderEffortSuffix(item.model, requestedThinking, effectiveThinking)
           : "";
-        const label = `${theme.fg(labelColor, baseLabel)}${effortSuffix}`;
+        const label = `${theme.fg(labelColor, baseLabel)}${availabilitySuffix}${effortSuffix}`;
         const prefixWidth = visibleWidth(prefix);
         if (prefixWidth >= renderWidth) {
           pushWrappedLine(`${prefix}${label}`);
@@ -320,7 +338,11 @@ export async function showModelSelector(options: SelectorViewOptions): Promise<S
       }
 
       lines.push("");
-      if (selectedModel && !selectedModel.reasoning) {
+      if (selectedItem && !selectedItem.isAvailable) {
+        pushWrappedLine(
+          theme.fg("warning", "* This favorite model is unavailable; press Space to remove it."),
+        );
+      } else if (selectedModel && !selectedModel.reasoning) {
         pushWrappedLine(
           theme.fg("warning", "* This model does not support reasoning; effort selection is disabled."),
         );

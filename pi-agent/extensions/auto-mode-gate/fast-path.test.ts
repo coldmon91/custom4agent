@@ -33,7 +33,9 @@ after(() => {
 });
 
 const check = (toolName: string, input: Record<string, unknown>) =>
-  isAutoApproved({ toolName, input }, boundary);
+  // The roots are passed explicitly so the fixture under $TMPDIR is not widened
+  // by whatever trusted-roots.json declares on this machine.
+  isAutoApproved({ toolName, input }, boundary, [boundary.cwd]);
 
 test("read-only tools skip the classifier even outside the directory", () => {
   for (const tool of ["read", "grep", "find", "ls"]) {
@@ -41,9 +43,16 @@ test("read-only tools skip the classifier even outside the directory", () => {
   }
 });
 
-test("shell tools always reach the classifier", () => {
-  assert.equal(check("bash", { command: "ls" }), false);
-  assert.equal(check("powershell", { command: "ls" }), false);
+test("shell commands are screened, and PowerShell is not screened at all", () => {
+  assert.equal(check("bash", { command: "ls" }), true, "read-only shell command");
+  assert.equal(check("bash", { command: "rm -rf build" }), false, "deletion");
+  assert.equal(check("bash", {}), false, "no command to screen");
+  assert.equal(check("powershell", { command: "Get-ChildItem" }), false, "unscreened dialect");
+});
+
+test("writes to credential-shaped paths are classified even inside the directory", () => {
+  assert.equal(check("write", { path: "sub/.env" }), false);
+  assert.equal(check("edit", { path: "sub/auth.json" }), false);
 });
 
 test("writes inside the working directory are auto-approved", () => {

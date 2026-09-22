@@ -31,8 +31,8 @@ Create a task for each of these items and complete them in order:
 1. **Explore project context** — check files, docs, recent commits
 2. **Ask clarifying questions** — one at a time; understand purpose, constraints, success criteria
 3. **Propose 2 ~ 3 approaches** — with trade-offs and your recommendation
-4. **Present design** — in sections scaled to their complexity; get user approval after each section
-5. **Write design doc** — save to `docs/specs/YYYY-MM-DD-<topic>-design.md`
+4. **Present proposed design** — label it "Proposed design" (Korean: "설계안"), scale sections to their complexity, and get user approval after each section
+5. **Record approved design** — save the approved design to `docs/specs/YYYY-MM-DD-<topic>-design.md`
 6. **Spec self-review** — inline check for placeholders, contradictions, ambiguity, scope
 7. **User reviews written spec** — ask the user to review the spec file before proceeding
 8. **Follow the requested phase** — after spec approval, start implementation when requested; invoke writing-plans only for an explicit plan request or explicit acceptance of an offer to write one
@@ -97,7 +97,14 @@ digraph brainstorming {
 
 **Presenting the design:**
 
-- Once you believe you understand what you're building, present the design
+Use status-accurate terms consistently so presenting and documenting the design do not look like two design phases:
+
+- Before user approval: "Proposed design" (Korean: "설계안")
+- After design approval: "Approved design" (Korean: "승인된 설계")
+- After the user reviews and approves the written spec: "Finalized design" (Korean: "확정된 설계"), only when that distinction is useful
+- Describe writing the design document as recording the approved design, not creating another design
+
+- Once you believe you understand what you're building, present the proposed design
 - Scale each section to its complexity: a few sentences if straightforward, up to 200 ~ 300 words if nuanced
 - Ask after each section whether it looks right so far
 - Cover: architecture, components, data flow, error handling, testing
@@ -123,7 +130,7 @@ digraph brainstorming {
 
 **Documentation:**
 
-- Write the validated design (spec) to `docs/specs/YYYY-MM-DD-<topic>-design.md`
+- Record the approved design (spec) in `docs/specs/YYYY-MM-DD-<topic>-design.md`; this persists the approved design rather than starting a second design phase
   - User preferences for spec location override this default
 
 **Spec self-review:**

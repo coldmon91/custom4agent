@@ -1,0 +1,92 @@
+# This is the configuration file for Ghostty.
+#
+# This template file has been automatically created at the following
+# path since Ghostty couldn't find any existing config files on your system:
+#
+#   /Users/cskim/Library/Application Support/com.mitchellh.ghostty/config
+#
+# The template does not set any default options, since Ghostty ships
+# with sensible defaults for all options. Users should only need to set
+# options that they want to change from the default.
+#
+# Run `ghostty +show-config --default --docs` to view a list of
+# all available config options and their default values.
+#
+# Additionally, each config option is also explained in detail
+# on Ghostty's website, at https://ghostty.org/docs/config.
+#
+# Ghostty can reload the configuration while running by using the menu
+# options or the bound key (default: Command + Shift + comma on macOS and
+# Control + Shift + comma on other platforms). Not all config options can be
+# reloaded while running; some only apply to new windows and others may require
+# a full restart to take effect.
+
+# theme = Catppuccin Frappe
+# theme = 0x96f
+# theme = Arcoiris
+# theme = Espresso
+
+# Config syntax crash course
+# ==========================
+# # The config file consists of simple key-value pairs,
+# # separated by equals signs.
+# font-family = Iosevka
+# window-padding-x = 2
+#
+# # Spacing around the equals sign does not matter.
+# # All of these are identical:
+# key=value
+# key= value
+# key =value
+# key = value
+#
+# # Any line beginning with a # is a comment. It's not possible to put
+# # a comment after a config option, since it would be interpreted as a
+# # part of the value. For example, this will have a value of "#123abc":
+# background = #123abc
+font-size = 12 
+
+#
+# # Empty values are used to reset config keys to default.
+# key =
+#
+# # Some config options have unique syntaxes for their value,
+# # which is explained in the docs for that config option.
+# # Just for example:
+# resize-overlay-duration = 4s 200ms
+
+# light purple
+split-divider-color = #995588
+
+# Disable CMD+Shift+w
+keybind = cmd+shift+w=unbind
+
+# Korean (Hangul) key mappings - make Ctrl+한글키 work like Ctrl+영문키
+keybind = ctrl+ㅊ=text:\x03
+
+# Korean (Hangul) key mapping - make Opt+ㅔ (physical P key, 두벌식) work like Opt+P.
+# Uses the W3C physical key code (key_p) so it matches regardless of keyboard layout,
+# instead of matching the Unicode codepoint which would only match "p" on a US layout.
+keybind = opt+key_p=text:\x1bp
+
+# Fix Shift+Enter for Claude Code multiline input
+keybind = shift+enter=text:\n
+
+# Mouse scroll sensitivity (default: 3)
+mouse-scroll-multiplier = 1
+
+macos-option-as-alt = true
+
+# NOTE: shell-integration-features ssh-env/ssh-terminfo were tried here but
+# removed. That feature wraps `ssh` as a shell function, which:
+#   - is incompatible with ~/.ssh/config Host entries using RemoteCommand
+#     (e.g. the `mypwsh` host) - Ghostty devs confirmed this is unsupported.
+#   - re-forces TERM=xterm-ghostty on hosts where its terminfo auto-install
+#     succeeds/is cached, undoing the fix below and breaking again inside
+#     sudo/su/tmux or hosts without `tic` (BusyBox, minimal images).
+#   - only applies to the interactive shell, never to scp/rsync/git/cron.
+# Fixed properly and universally via `SetEnv TERM=xterm-256color` in
+# ~/.ssh/config (Host * block) instead - see that file.
+
+# Use a broadly supported terminal type to avoid xterm-ghostty terminfo errors on SSH/sudo.
+term = xterm-256color

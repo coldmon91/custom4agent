@@ -1,0 +1,28 @@
+[
+  {
+    "context": "Terminal",
+    "bindings": {
+      "shift-enter": [
+        "terminal::SendText",
+        "\u001b\r"
+      ]
+    }
+  },
+  {
+    "bindings": {
+      "ctrl-shift-f": "workspace::ToggleZoom"
+    }
+  },
+  {
+    "unbind": {
+      "shift-escape": "workspace::ToggleZoom"
+    }
+  },
+  {
+    "context": "Editor && edit_prediction",
+    "bindings": {
+      "cmd-right": "editor::AcceptNextWordEditPrediction",
+      "cmd-down": "editor::AcceptNextLineEditPrediction"
+    }
+  }
+]

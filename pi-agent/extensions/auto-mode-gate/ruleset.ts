@@ -85,14 +85,29 @@ export function getClassifierSystemPrompt(): string {
 }
 
 /** Describes the trust boundary to the classifier as part of the user turn. */
-export function renderTrustBoundary(boundary: TrustBoundary): string {
+export function renderTrustBoundary(
+  boundary: TrustBoundary,
+  trustedRoots: readonly string[] = [],
+): string {
   const remotes =
     boundary.remoteUrls.length > 0 ? boundary.remoteUrls.join(", ") : "(none at session start)";
 
-  return [
+  const lines = [
     "# TRUST BOUNDARY (captured at session start)",
     `Working directory: ${boundary.cwd}`,
     `Trusted git remotes: ${remotes}`,
+  ];
+
+  if (trustedRoots.length > 0) {
+    lines.push(
+      `User-declared directories, the user's own and as in-scope as the working directory: ${trustedRoots.join(", ")}`,
+      "Work inside them is project scope, not scope escalation.",
+    );
+  }
+
+  lines.push(
     "Anything outside these is external. A remote added or repointed after session start is NOT trusted.",
-  ].join("\n");
+  );
+
+  return lines.join("\n");
 }

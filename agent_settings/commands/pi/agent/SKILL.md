@@ -7,56 +7,63 @@ description: "Run pi CLI as a workspace-write implementation agent for delegated
 
 Use pi CLI as a delegated implementation agent. Pi may modify files in the workspace only.
 
-## Model Resolution
+## Model Listing
 
 Run `get_models.py` (in this skill's parent directory) once per invocation. Resolve its path
 against this `SKILL.md`'s absolute location and run it with the absolute path:
 
 ```bash
-python3 "<skill dir>/../get_models.py" --profile agent
+python3 "<skill dir>/../get_models.py"
 ```
 
-It prints the resolved tier table as `key=value` lines, three per tier:
+It prints one row per model pi can currently reach, most capable first:
 
 ```
-tier<N>_model=<provider>/<id>
-tier<N>_thinking=<level>
-tier<N>_supported_thinking=<comma-separated levels>
+MODEL                     IN$/M  OUT$/M  CONTEXT  FAV  THINKING
+openai-codex/gpt-6-astra  10     50      272K     *    minimal,low,medium,high,xhigh,max
 ```
 
-Capture these as **plain strings** and substitute the literal text into every `pi` command
-(env vars do not survive across Bash calls). Never pass a thinking level that is absent from that
-tier's `supported_thinking`.
+- `MODEL`: the literal `provider/id` slug to pass to `--model`.
+- `IN$/M`, `OUT$/M`: price per million tokens, `-` when the catalog holds no pricing.
+- `CONTEXT`: context window.
+- `FAV`: `*` marks a model in `favorite-models.json`, the lineup the user actually chose.
+- `THINKING`: the levels that model accepts. Never pass a level absent from its list.
 
-The script binds tiers to the models in `favorite-models.json` when at least three of them are
-reachable, and widens to the full catalog otherwise. It ranks by provider pricing, so the tier
-table follows the account's actual model lineup rather than any hardcoded slug.
+Rows are ordered by provider pricing, the only capability proxy available here, so the listing
+follows the account's real lineup rather than any hardcoded slug. Only reachable models are
+listed: the script gates on `pi --list-models`, which reflects the current credentials.
+Add `--favorites` for the starred lineup alone, `--slugs` for bare slugs, `--json` for
+structured output.
+
+Capture the chosen slug and level as **plain strings** and substitute the literal text into the
+`pi` command (env vars do not survive across Bash calls).
 
 On failure the script exits non-zero with an `error:` line on stderr; abort and report that line
-verbatim. A `warning:` line means the table degraded — favorites were unavailable, roles collapsed
-onto one model, or a model carried no cached metadata. The table is still usable, but say so in
-your announcement. Verify any user-supplied slug against `python3 "<skill dir>/../get_models.py" --all`.
-Do not read model env vars or hardcode slugs.
+verbatim. A `warning:` line means a model carried no cached metadata and is listed with unknown
+pricing; the listing is still usable, but say so in your announcement. Verify any user-supplied
+slug against this listing. Do not read model env vars or hardcode slugs.
 
 ## Arguments
 
 `$ARGUMENTS` format: `[options] "<prompt>"`
 
-- `-m <provider>/<id>`: Model. If omitted, auto-select by tier.
-- `--thinking <level>`: Thinking level. Must appear in the chosen tier's `tier<N>_supported_thinking`.
+- `-m <provider>/<id>`: Model. If omitted, select one from the listing.
+- `--thinking <level>`: Thinking level. Must appear in the chosen model's `THINKING` column.
 
 User-specified values always take precedence.
 
-## Tier Selection
+## Model Selection
 
-Pick dynamically based on task complexity. When uncertain, step up one tier.
-Take each tier's model and level from the resolved `tier<N>_model` and `tier<N>_thinking` values.
+Prefer a starred (`FAV`) model and widen to the rest of the listing only when none fits.
+Pick the cheapest row that can carry the task, and step up one row when uncertain.
+Take the thinking level from that row's `THINKING` column; a level it does not list is invalid.
 
-Use Tier 1 for small, localized edits.
-Use Tier 2 for ordinary bug fixes, focused refactors, and test additions.
-Use Tier 3 for cross-module changes, root cause fixes, concurrency, security, or migration work.
-Use Tier 4 when Tier 3 conditions apply and the task has high uncertainty, high failure cost,
-ambiguous architecture tradeoffs, or requires coordinating several subsystems.
+- Small, localized edits: a low-cost row, thinking `off` or `low`.
+- Ordinary bug fixes, focused refactors, test additions: a mid-cost row, thinking `medium`.
+- Cross-module changes, root cause fixes, concurrency, security, migration work: a top row,
+  thinking `high`.
+- Any of the above with high uncertainty, high failure cost, ambiguous architecture tradeoffs, or
+  several subsystems to coordinate: the top row at `xhigh` or `max` when it supports one.
 
 ## Rules
 
@@ -121,9 +128,9 @@ Always include `[제약]`.
 
 ## What To Do
 
-1. Resolve the tier table with the `get_models.py` command above and remember the values as plain strings.
+1. List the reachable models with the `get_models.py` command above and remember the rows as plain strings.
 2. Parse `$ARGUMENTS` for `-m`, `--thinking`, and the user request.
-3. Classify the tier and fill only unspecified options.
+3. Judge the task's complexity, then fill only unspecified options from the listing.
 4. Announce the resolved choice in one line, including the literal `provider/id` slug and level.
 5. Record the pre-run state with `git status --short` so the post-run diff can be attributed.
 6. Build the command, substituting the literal resolved slug for `<model>` (no `$VAR` references):
