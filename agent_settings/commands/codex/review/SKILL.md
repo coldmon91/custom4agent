@@ -7,53 +7,63 @@ description: "Run Codex CLI in read-only mode for code review, analysis, debuggi
 
 Use OpenAI Codex CLI as a read-only reviewer. Codex must analyze and suggest only.
 
-## Model Resolution
+## Model Listing
 
 Run `get_models.py` (in this skill's parent directory) once per invocation. Resolve its path
 against this `SKILL.md`'s absolute location and run it with the absolute path:
 
 ```bash
-python3 "<skill dir>/../get_models.py" --profile review
+python3 "<skill dir>/../get_models.py"
 ```
 
-It prints the resolved tier table as `key=value` lines, three per tier:
+It prints one row per model Codex can currently use, in Codex's own model-picker order:
 
 ```
-tier<N>_model=<slug>
-tier<N>_effort=<level>
-tier<N>_supported_efforts=<comma-separated levels>
+MODEL          DEFAULT  EFFORTS                          DESCRIPTION
+gpt-6-astra    low      low,medium,high,xhigh,max,ultra  Frontier intelligence for the most demanding work.
 ```
 
-Capture these as **plain strings** and substitute the literal text into every `codex` command
-(env vars do not survive across Bash calls). Never pass an effort that is absent from that tier's
-`supported_efforts`.
+- `MODEL`: the literal slug to pass to `-m`.
+- `DEFAULT`: the model's default reasoning effort, `-` when the catalog names none.
+- `EFFORTS`: the levels that model accepts. Never pass a level absent from its list.
+- `DESCRIPTION`: the provider's own summary, the only capability signal the catalog carries.
+
+Only OpenAI models shown in Codex's picker and not scheduled for upgrade are listed, so the
+listing follows the account's real lineup rather than any hardcoded slug.
+Add `--slugs` for bare slugs, `--json` for structured output.
+
+Capture the chosen slug and effort as **plain strings** and substitute the literal text into every
+`codex` command (env vars do not survive across Bash calls).
 
 On failure the script exits non-zero with an `error:` line on stderr; abort and report that line
-verbatim. A `warning:` line means a role was resolved by fallback because the model lineup
-changed — the table is still usable, but say so in your announcement. Fallback slug reference:
-`https://developers.openai.com/codex/models`. Do not read model env vars or hardcode slugs.
+verbatim. Fallback slug reference: `https://developers.openai.com/codex/models`.
+Do not read model env vars or hardcode slugs.
 
 ## Arguments
 
 `$ARGUMENTS` format: `[options] "<prompt>"`
 
-- `-m <model>`: Model. If omitted, auto-select by tier.
-- `-c model_reasoning_effort=<level>`: Reasoning level. Must appear in the chosen tier's
-  `tier<N>_supported_efforts`.
+- `-m <model>`: Model. If omitted, select one from the listing.
+- `-c model_reasoning_effort=<level>`: Reasoning level. Must appear in the chosen model's
+  `EFFORTS` column.
 
 User-specified values always take precedence.
 
-## Tier Selection
+## Model Selection
 
-Pick dynamically based on task complexity. When uncertain, step up one tier.
-Take each tier's model and effort from the resolved `tier<N>_model` and `tier<N>_effort` values.
-Tier 2 may be raised to `high` for multi-turn analysis when `tier2_supported_efforts` lists it.
+Judge each row's strength from its `DESCRIPTION`, not from its slug: suffixes such as `sol` or
+`luna` are reused across generations with different roles.
+Prefer earlier rows over those described as older or legacy, and step up one level when uncertain.
+Take the effort from that row's `EFFORTS` column; when the target level is absent, use the highest
+listed level below it.
 
-Use Tier 1 for symbol lookup, path checks, and short Q&A.
-Use Tier 2 for single-file review, moderate refactoring suggestions, or multi-turn analysis.
-Use Tier 3 for cross-module review, bug analysis, architecture, security, concurrency, or root cause tracing.
-Use Tier 4 when Tier 3 conditions apply and incorrect advice has high risk,
-the evidence is ambiguous, or the analysis spans several subsystems.
+- Symbol lookup, path checks, short Q&A: a fast or affordable row, effort `medium`.
+- Single-file review, moderate refactoring suggestions, multi-turn analysis: a fast or affordable
+  row, effort `xhigh`.
+- Cross-module review, bug analysis, architecture, security, concurrency, root cause tracing:
+  the frontier row, effort `high`.
+- Any of the above where incorrect advice carries high risk, the evidence is ambiguous, or the
+  analysis spans several subsystems: the frontier row, effort `xhigh`.
 
 ## Rules
 
@@ -102,9 +112,9 @@ Always include `[제약]`.
 
 ## What To Do
 
-1. Resolve the tier table with the `get_models.py` command above and remember the values as plain strings.
+1. List the usable models with the `get_models.py` command above and remember the rows as plain strings.
 2. Parse `$ARGUMENTS` for `-m`, `-c model_reasoning_effort=`, and the user request.
-3. Classify the tier and fill only unspecified options.
+3. Judge the task's complexity, then fill only unspecified options from the listing.
 4. Announce the resolved choice in one line, including the literal model slug.
 5. Build the command, substituting the literal resolved slug for `<model>` (no `$VAR` references).
    Use `-` so that Codex reads the entire assembled prompt from stdin:

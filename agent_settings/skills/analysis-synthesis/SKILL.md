@@ -1,6 +1,6 @@
 ---
 name: analysis-synthesis
-description: When finishing review·analysis·investigation work, append a higher-level "종합 평가" (overall assessment) on top of the listed findings. Trigger at the final step of any task that reports analysis results to the user — code review, architecture/impact/root-cause analysis, log investigation, security audit, technical research, codebase comprehension, etc. Apply when the user requests things like "분석해줘", "검토해줘", "조사해줘", "리뷰해줘", "영향 파악해줘", "원인 찾아줘", or right before another analysis skill (analysis-program, analysis-root-cause, analysis-impact, analysis-architecture, analysis-log, security-audit, etc.) reports its findings. Do not trigger for output work like writing/running code or changing files, nor for simple fact lookups.
+description: When finishing review·analysis·investigation work, append a higher-level "종합 평가" (overall assessment) on top of the listed findings. Trigger at the final step of any task that reports analysis results to the user — code review, architecture/impact/root-cause analysis, log investigation, security audit, technical research, codebase comprehension, etc. Apply when the user requests things like "분석해줘", "검토해줘", "조사해줘", "리뷰해줘", "영향 파악해줘", "원인 찾아줘", or right before another analysis skill (analysis-program, analysis-root-cause, analysis-impact, analysis-architecture, etc.) reports its findings. Do not trigger for output work like writing/running code or changing files, nor for simple fact lookups.
 ---
 
 # Analysis Synthesis

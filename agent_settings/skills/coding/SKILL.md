@@ -5,6 +5,16 @@ description: Read when writing OR modifying code - including edits, refactoring,
 
 # Coding Rules
 
+## Language Skills
+
+Load the matching skill before editing, alongside these rules.
+
+- C++ (`.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, CMake) -> `lang-cpp`
+- Go (`.go`, `go.mod`) -> `lang-go`
+- Rust (`.rs`, `Cargo.toml`) -> `lang-rust`
+- Swift (`.swift`, Swift package) -> `lang-swift`
+- Flutter/Dart (`.dart`, `pubspec.yaml`) -> `lang-flutter`
+
 ## Before Modifying Code
 
 - Discovery of every caller/reference before edit.
@@ -24,4 +34,6 @@ description: Read when writing OR modifying code - including edits, refactoring,
 - Never infer thread-safety from a name, or from a declaration you have not actually resolved.
   With deep inheritance, typedef chains, or heavy templates, tracing the type is unreliable —
   make the compiler or a sanitizer answer instead.
-- C++ -> `lang-cpp/references/concurrency.md`; Go -> `lang-go/references/concurrency.md`
+- C++ -> `lang-cpp/references/concurrency.md`; Go -> `lang-go/references/concurrency.md`;
+  Rust -> `lang-rust/SKILL.md` (Concurrency), `lang-rust/references/async.md` (Shared state);
+  Swift -> `lang-swift/references/async-concurrency.md`

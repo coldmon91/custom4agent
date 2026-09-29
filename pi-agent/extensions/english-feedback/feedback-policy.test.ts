@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 import {
   MAX_FEEDBACK_INPUT_LENGTH,
+  extractCompleteJsonObject,
   maskBacktickSegments,
+  parseFeedbackDecision,
   parseFeedbackResponse,
   prepareFeedbackInput,
   type FeedbackPlaceholder,
@@ -78,6 +80,46 @@ describe("prepareFeedbackInput", () => {
     const masked = maskBacktickSegments("<INLINE_CODE_1>과 `value`를 확인해줘");
 
     assert.equal(masked.placeholders[0].token, "<INLINE_CODE_2>");
+  });
+});
+
+describe("extractCompleteJsonObject", () => {
+  test("returns complete objects and null while incomplete", () => {
+    assert.equal(extractCompleteJsonObject('{"feedback":null}'), '{"feedback":null}');
+    assert.equal(extractCompleteJsonObject(' {"feedback":"hi"} junk'), '{"feedback":"hi"}');
+    assert.equal(extractCompleteJsonObject('{"feedback":"hi'), null);
+    assert.equal(extractCompleteJsonObject("no braces yet"), null);
+  });
+
+  test("ignores braces and quotes inside the feedback string", () => {
+    assert.equal(
+      extractCompleteJsonObject('{"feedback":"use } and { carefully"}'),
+      '{"feedback":"use } and { carefully"}',
+    );
+    assert.equal(
+      extractCompleteJsonObject('{"feedback":"a \\" quoted \\" tail"}'),
+      '{"feedback":"a \\" quoted \\" tail"}',
+    );
+  });
+
+  test("returns the first object when the model emits extra content", () => {
+    assert.equal(
+      extractCompleteJsonObject('{"feedback":"x"}{"feedback":"y"}'),
+      '{"feedback":"x"}',
+    );
+  });
+});
+
+describe("parseFeedbackDecision", () => {
+  test("distinguishes none, feedback, and invalid decisions", () => {
+    assert.deepEqual(parseFeedbackDecision(response(null), []), { kind: "none" });
+    assert.deepEqual(parseFeedbackDecision(response("Hello there."), []), {
+      kind: "feedback",
+      text: "Hello there.",
+    });
+    assert.deepEqual(parseFeedbackDecision("not json", []), { kind: "invalid" });
+    assert.deepEqual(parseFeedbackDecision('{"feedback":42}', []), { kind: "invalid" });
+    assert.deepEqual(parseFeedbackDecision('{"other":1}', []), { kind: "invalid" });
   });
 });
 

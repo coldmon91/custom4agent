@@ -1,8 +1,5 @@
 # Memory Management & Performance
 
-Keyword-directed guidance. Names the technique + the decision rule. Exact numeric
-constants that matter (alignment, SIMD width) are kept literal.
-
 ## Smart Pointers
 
 - `std::make_unique` — default for exclusive ownership; `std::make_shared` only when
@@ -53,16 +50,3 @@ constants that matter (alignment, SIMD width) are kept literal.
 - `alignas(N)` on type/variable; `alignof` / `static_assert` to verify. Aligned dynamic
   alloc: `std::aligned_alloc` (C++17) or `posix_memalign`.
 - Placement `new (buf) T(...)` requires manual `obj->~T()` — no `delete`.
-
-## Quick Reference
-
-| Technique | Use Case | Benefit |
-|-----------|----------|---------|
-| Smart Pointers | Ownership management | Memory safety |
-| Move Semantics | Avoid copies | Performance |
-| Custom Allocators | Specialized allocation | Speed + control |
-| SIMD | Parallel computation | 4-8x speedup |
-| SoA Layout | Sequential access | Cache efficiency |
-| Memory Pools | Frequent alloc/dealloc | Reduced fragmentation |
-| Alignment | SIMD/cache optimization | Performance |
-| RVO/NRVO | Return objects | Zero-copy |

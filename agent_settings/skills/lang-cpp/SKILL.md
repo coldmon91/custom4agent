@@ -1,69 +1,39 @@
 ---
 name: lang-cpp
-description: Writes, optimizes, and debugs C++ applications using modern C++20/23 features, template metaprogramming, and high-performance systems techniques. Use when building or refactoring C++ code requiring concepts, ranges, coroutines, SIMD optimization, or careful memory management — or when addressing performance bottlenecks, concurrency issues, and build system configuration with CMake.
+description: Use whenever writing, modifying, reviewing, or debugging C++ code — any `.cpp`, `.cc`, `.cxx`, `.h`, or `.hpp` file, or a CMake project — even for a one-line edit. Covers modern C++17/20/23 (concepts, ranges, coroutines), RAII and memory management, template metaprogramming, concurrency and data races, SIMD and performance bottlenecks, and CMake build configuration.
 license: MIT
 metadata:
   author: https://github.com/Jeffallan
-  version: "1.1.0"
-  domain: language
-  triggers: C++, C++20, C++23, modern C++, template metaprogramming, systems programming, performance optimization, SIMD, memory management, CMake
-  role: specialist
-  scope: implementation
-  output-format: code
-  related-skills: rust-engineer, embedded-systems
 ---
 
-# C++ Pro
+# C++
 
-Senior C++ developer with deep expertise in modern C++20/23, systems programming, high-performance computing, and zero-overhead abstractions.
+Match the standard the project's build already targets; use newer features only when the toolchain supports them.
 
-## Core Workflow
+## Rules
 
-1. **Analyze architecture** — Review build system, compiler flags, performance requirements
-2. **Design with concepts** — Create type-safe interfaces using C++20 concepts
-3. **Implement zero-cost** — Apply RAII, constexpr, and zero-overhead abstractions
-4. **Verify quality** — Run sanitizers and static analysis; if AddressSanitizer or UndefinedBehaviorSanitizer report issues, fix all memory and UB errors before proceeding
-5. **Benchmark** — Profile with real workloads; if performance targets are not met, apply targeted optimizations (SIMD, cache layout, move semantics) and re-measure
+- RAII for every resource; no raw `new` / `delete`. `std::unique_ptr` by default, `std::shared_ptr` only for genuinely shared ownership
+- Const-correct code; `static_cast` and friends, never C-style casts
+- Constrain templates with concepts (C++20) instead of SFINAE / `enable_if`
+- Resource-owning types get `noexcept` move operations (Rule of Five, or `= default` when members suffice)
+- One error strategy per module — exceptions or `std::expected` / error codes, not mixed
+- Shared mutable state lives in a lock-owning wrapper so unlocked access cannot compile (see `references/concurrency.md`)
+- No `using namespace std` in headers
+- Treat undefined behavior as a bug, even when it "works"
 
-## Reference Guide
+## Validate before finishing
 
-Load detailed guidance based on context:
+- Build with `-Wall -Wextra -Wpedantic` (MSVC `/W4`) and fix every warning
+- Run tests under ASan + UBSan; TSan for concurrent code — fix every report before proceeding
+- clang-tidy with the repo's `.clang-tidy` when present
+- Optimize only after profiling real workloads, then re-measure
 
-| Topic | Reference | Load When |
-|-------|-----------|-----------|
-| Modern C++ Features | `references/modern-cpp.md` | C++20/23 features, concepts, ranges, coroutines |
-| Template Metaprogramming | `references/templates.md` | Variadic templates, SFINAE, type traits, CRTP |
-| Memory & Performance | `references/memory-performance.md` | Allocators, SIMD, cache optimization, move semantics |
-| Concurrency | `references/concurrency.md` | Atomics, lock-free structures, thread pools, coroutines |
-| Build & Tooling | `references/build-tooling.md` | CMake, sanitizers, static analysis, testing |
+## References
 
-## Constraints
-
-### MUST DO
-- Follow C++ Core Guidelines
-- Use concepts for template constraints
-- Apply RAII universally
-- Use `auto` with type deduction
-- Prefer `std::unique_ptr` and `std::shared_ptr`
-- Enable all compiler warnings (-Wall -Wextra -Wpedantic)
-- Run AddressSanitizer and UndefinedBehaviorSanitizer
-- Write const-correct code
-
-### MUST NOT DO
-- raw `new`/`delete` (prefer smart pointers)
-- Ignore compiler warnings
-- C-style casts (use static_cast, etc.)
-- Mix exception and error code patterns inconsistently
-- Write non-const-correct code
-- `using namespace std` in headers
-- Ignore undefined behavior
-- Skip move semantics for expensive types
-
-## Output Templates
-
-When implementing C++ features, provide:
-1. Header file with interfaces and templates
-2. Implementation file (when needed)
-3. CMakeLists.txt updates (if applicable)
-4. Test file demonstrating usage
-5. Brief explanation of design decisions and performance characteristics
+| Topic | File | Load when |
+|-------|------|-----------|
+| Modern C++ | `references/modern-cpp.md` | Concepts, ranges, coroutines, `<=>`, modules, `std::expected` / `std::print` |
+| Templates | `references/templates.md` | Variadic templates, `if constexpr`, SFINAE, type traits, CRTP |
+| Memory & Performance | `references/memory-performance.md` | Smart pointers, move semantics, allocators, SIMD, cache layout |
+| Concurrency | `references/concurrency.md` | Atomics, memory ordering, locks, lock-owning wrappers, thread safety analysis |
+| Build & Tooling | `references/build-tooling.md` | CMake, sanitizers, static analysis, GoogleTest |

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Resolve Codex tiers to (model, reasoning effort) from `codex debug models`."""
+"""List the Codex models currently usable, with reasoning efforts, from `codex debug models`."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import re
 import subprocess
 import sys
 from math import inf
@@ -15,61 +14,16 @@ from typing import NoReturn
 
 EFFORT_ORDER = ("low", "medium", "high", "xhigh", "max", "ultra")
 
-# Ordered strongest to weakest. Role names are stable even when model names are not.
-ROLES = ("deep", "balanced", "fast")
-
-# Layer 1 signals: provider-authored naming and prose. Cheap to extend, and the
-# description keywords keep working for models that carry no variant suffix
-# (e.g. `gpt-5.5`), which a suffix-only match would silently drop.
-ROLE_SUFFIXES = {"sol": "deep", "terra": "balanced", "luna": "fast"}
-ROLE_KEYWORDS = {
-    "deep": ("frontier", "flagship", "hardest", "complex", "reasoning"),
-    "balanced": ("balanced", "everyday", "general"),
-    "fast": ("fast", "affordable", "cost-efficient", "throughput", "simple", "lightweight"),
-}
-SUFFIX_WEIGHT = 3
-
-# Layer 3: when even capability ranking runs out of models, borrow from a neighbour
-# role so every tier stays answerable on a single-model account.
-ROLE_BORROW_ORDER = {
-    "deep": ("balanced", "fast"),
-    "balanced": ("deep", "fast"),
-    "fast": ("balanced", "deep"),
-}
-
-# Tier -> (role, requested effort). The effort is a ceiling, clamped down to what
-# the resolved model actually supports.
-TIER_POLICY = {
-    "agent": (
-        ("fast", "medium"),
-        ("fast", "xhigh"),
-        ("deep", "high"),
-        ("deep", "xhigh"),
-    ),
-    "review": (
-        ("fast", "medium"),
-        ("fast", "xhigh"),
-        ("deep", "high"),
-        ("deep", "xhigh"),
-    ),
-}
-
-VERSION_PATTERN = re.compile(r"(\d+(?:\.\d+)?)")
-
 # Codex folds `model_catalog_json` and any local `openai_base_url` provider into the
 # same catalog, so `codex debug models` can list Ollama or other third-party models.
-# Tier resolution must stay inside OpenAI's own lineup, and the slug is the only
-# vendor marker the catalog carries. `:` is Ollama's `name:tag` separator, which no
-# Codex slug uses, so it rejects a locally served `gpt-oss:20b` as well.
+# The listing must stay inside OpenAI's own lineup, and the slug is the only vendor
+# marker the catalog carries. `:` is Ollama's `name:tag` separator, which no Codex
+# slug uses, so it rejects a locally served `gpt-oss:20b` as well.
 VENDOR_PREFIXES = ("gpt", "codex")
 
 
 def die(message: str) -> NoReturn:
     sys.exit(f"error: {message}")
-
-
-def warn(message: str) -> None:
-    print(f"warning: {message}", file=sys.stderr)
 
 
 def run_codex(timeout: float) -> str:
@@ -109,8 +63,12 @@ def load_models(source: str | None, timeout: float) -> list[dict]:
 
 
 def is_vendor_model(model: dict) -> bool:
-    slug = model.get("slug", "").lower()
-    return slug.startswith(VENDOR_PREFIXES) and ":" not in slug
+    slug = model.get("slug")
+    return (
+        isinstance(slug, str)
+        and slug.lower().startswith(VENDOR_PREFIXES)
+        and ":" not in slug
+    )
 
 
 def is_usable(model: dict) -> bool:
@@ -129,11 +87,6 @@ def priority_of(model: dict) -> float:
     return float(priority) if isinstance(priority, (int, float)) else inf
 
 
-def version_of(model: dict) -> float:
-    match = VERSION_PATTERN.search(model.get("slug", ""))
-    return float(match.group(1)) if match else 0.0
-
-
 def supported_efforts(model: dict) -> list[str]:
     levels = model.get("supported_reasoning_levels")
     found = (
@@ -144,136 +97,64 @@ def supported_efforts(model: dict) -> list[str]:
     return [effort for effort in EFFORT_ORDER if effort in found]
 
 
-def role_score(model: dict, role: str) -> int:
-    slug = model.get("slug", "").lower()
-    description = model.get("description", "").lower()
-    suffix = slug.rsplit("-", 1)[-1]
-    score = SUFFIX_WEIGHT if ROLE_SUFFIXES.get(suffix) == role else 0
-    return score + sum(keyword in description for keyword in ROLE_KEYWORDS[role])
+def upgrade_target(model: dict) -> str | None:
+    upgrade = model.get("upgrade")
+    target = upgrade.get("model") if isinstance(upgrade, dict) else None
+    return target if isinstance(target, str) and target else None
 
 
-def capability_rank(model: dict) -> tuple[int, float, float]:
-    """Name-independent strength proxy: reasoning headroom, then version, then priority."""
-    supported = supported_efforts(model)
-    ceiling = EFFORT_ORDER.index(supported[-1]) if supported else -1
-    return (ceiling, version_of(model), -priority_of(model))
+def describe(model: dict) -> dict:
+    efforts = supported_efforts(model)
+    default = model.get("default_reasoning_level")
+    return {
+        "model": model["slug"],
+        "default_effort": default if default in efforts else None,
+        "efforts": efforts,
+        # Collapse embedded newlines so each model stays on one table row.
+        "description": " ".join(str(model.get("description") or "").split()),
+        "upgrade_to": upgrade_target(model),
+    }
 
 
-def assign_roles(candidates: list[dict]) -> tuple[dict[str, dict], list[str]]:
-    """Bind every role to a model through three layers, degrading instead of failing.
-
-    1. Naming and description signals, greedily and one model per role.
-    2. Capability ranking for roles no signal matched, so unknown model names still land.
-    3. Borrowing from a neighbouring role when models simply run out.
-    """
-    ranked = [
-        (score, -priority_of(model), role, index)
-        for role in ROLES
-        for index, model in enumerate(candidates)
-        if (score := role_score(model, role)) > 0
+def format_table(rows: list[dict]) -> str:
+    """Fixed-width columns; DESCRIPTION stays last because it contains spaces."""
+    header = ["MODEL", "DEFAULT", "EFFORTS", "DESCRIPTION"]
+    cells = [
+        [
+            row["model"],
+            row["default_effort"] or "-",
+            ",".join(row["efforts"]) or "-",
+            row["description"] or "-",
+        ]
+        for row in rows
     ]
-    ranked.sort(reverse=True)
+    # Only reachable with --include-deprecated, so the default table keeps four columns.
+    if any(row["upgrade_to"] for row in rows):
+        header.insert(3, "UPGRADE")
+        for cell, row in zip(cells, rows):
+            cell.insert(3, row["upgrade_to"] or "-")
 
-    assigned: dict[str, dict] = {}
-    taken: set[int] = set()
-    for _, _, role, index in ranked:
-        if role not in assigned and index not in taken:
-            assigned[role] = candidates[index]
-            taken.add(index)
-
-    notes: list[str] = []
-    leftovers = [model for index, model in enumerate(candidates) if index not in taken]
-    leftovers.sort(key=capability_rank, reverse=True)
-
-    for role in ROLES:
-        if role in assigned or not leftovers:
-            continue
-        # `fast` wants the weakest leftover; the stronger roles want the strongest.
-        model = leftovers.pop(-1 if role == "fast" else 0)
-        assigned[role] = model
-        notes.append(
-            f"role `{role}` matched no naming or description signal; "
-            f"fell back to capability ranking -> {model.get('slug', '')}"
-        )
-
-    for role in ROLES:
-        if role in assigned:
-            continue
-        source = next((other for other in ROLE_BORROW_ORDER[role] if other in assigned), None)
-        if source is None:
-            continue
-        assigned[role] = assigned[source]
-        notes.append(f"role `{role}` has no distinct model; reusing the `{source}` model")
-
-    return assigned, notes
-
-
-def clamp_effort(requested: str, supported: list[str]) -> str | None:
-    ceiling = EFFORT_ORDER.index(requested)
-    return next(
-        (effort for effort in reversed(supported) if EFFORT_ORDER.index(effort) <= ceiling),
-        None,
-    )
-
-
-def resolve_tiers(assigned: dict[str, dict], policy: tuple) -> list[dict]:
-    tiers = []
-    for number, (role, requested) in enumerate(policy, start=1):
-        model = assigned.get(role)
-        if model is None:
-            die(f"tier{number}: no available model could be bound to the `{role}` role")
-
-        slug = model.get("slug", "")
-        supported = supported_efforts(model)
-        if not supported:
-            die(f"tier{number}: {slug} reports no supported reasoning levels")
-
-        effort = clamp_effort(requested, supported)
-        if effort is None:
-            die(f"tier{number}: {slug} supports no reasoning level at or below `{requested}`")
-
-        tiers.append({
-            "tier": number,
-            "role": role,
-            "model": slug,
-            "effort": effort,
-            "supported_efforts": supported,
-        })
-    return tiers
-
-
-def format_tiers(tiers: list[dict]) -> str:
+    table = [header, *cells]
+    widths = [max(len(line[i]) for line in table) for i in range(len(header))]
     return "\n".join(
-        line
-        for tier in tiers
-        for line in (
-            f"tier{tier['tier']}_model={tier['model']}",
-            f"tier{tier['tier']}_effort={tier['effort']}",
-            f"tier{tier['tier']}_supported_efforts={','.join(tier['supported_efforts'])}",
-        )
+        "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(line)).rstrip()
+        for line in table
     )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Resolve Codex tier models and reasoning efforts.",
-    )
-    parser.add_argument(
-        "--profile",
-        choices=sorted(TIER_POLICY),
-        default="agent",
-        help="tier policy to apply (default: agent)",
-    )
-    parser.add_argument("--json", action="store_true", help="emit the tier table as JSON")
-    parser.add_argument(
-        "--all",
+    parser = argparse.ArgumentParser(description="List the Codex models currently usable.")
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true", help="emit the model list as JSON")
+    output.add_argument(
+        "--slugs",
         action="store_true",
-        help="list usable model slugs instead of the tier table",
+        help="print bare model slugs, one per line",
     )
     parser.add_argument(
         "--include-deprecated",
         action="store_true",
-        help="with --all, also list models scheduled for upgrade",
+        help="also list models scheduled for upgrade",
     )
     parser.add_argument(
         "--from-file",
@@ -296,23 +177,18 @@ def main() -> None:
             "`model_catalog_json` and `openai_base_url` in ~/.codex/config.toml"
         )
 
-    if args.all:
-        pool = usable if args.include_deprecated else [m for m in usable if is_current(m)]
-        for model in sorted(pool, key=priority_of):
-            if slug := model.get("slug"):
-                print(slug)
-        return
+    pool = usable if args.include_deprecated else [m for m in usable if is_current(m)]
+    if not pool:
+        die("every usable model is scheduled for upgrade; rerun with --include-deprecated")
 
-    candidates = [model for model in usable if is_current(model) and model.get("slug")]
-    if not candidates:
-        die("every usable model is scheduled for upgrade; no current model to resolve")
-
-    assigned, notes = assign_roles(candidates)
-    for note in notes:
-        warn(note)
-
-    tiers = resolve_tiers(assigned, TIER_POLICY[args.profile])
-    print(json.dumps(tiers, indent=2) if args.json else format_tiers(tiers))
+    # Catalog priority is the order Codex's own model picker uses.
+    rows = [describe(model) for model in sorted(pool, key=priority_of)]
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    elif args.slugs:
+        print("\n".join(row["model"] for row in rows))
+    else:
+        print(format_table(rows))
 
 
 if __name__ == "__main__":

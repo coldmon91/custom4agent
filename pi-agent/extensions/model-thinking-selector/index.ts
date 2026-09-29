@@ -14,7 +14,8 @@ import {
   type ModelThinkingLevel,
 } from "@earendil-works/pi-ai/compat";
 import { Key, matchesKey, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import { thinkingColor } from "./thinking-colors";
+import { thinkingColor } from "../thinking-colors";
+import { withSelectorDiagnostics, writeSelectorDiagnostic } from "./model-selector-diagnostics";
 
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const MAX_VISIBLE_MODELS = 10;
@@ -207,7 +208,8 @@ async function recordRecentModel(provider: string, modelId: string): Promise<voi
       ].slice(0, MAX_RECENT_MODELS);
       await saveRecentModelStore({ version: 1, items });
     })
-    .catch((error) => {
+    .catch(async (error) => {
+      await writeSelectorDiagnostic(getAgentDir(), "recent model update failed", error);
       console.error("Failed to update recent-models.json:", error);
     });
 
@@ -226,7 +228,8 @@ function enqueueGlobalSettingsWrite(label: string, apply: (settings: SettingsMan
       apply(settings);
       await settings.flush();
     })
-    .catch((error) => {
+    .catch(async (error) => {
+      await writeSelectorDiagnostic(getAgentDir(), `settings persistence failed: ${label}`, error);
       console.error(`Failed to persist ${label} to settings.json:`, error);
     });
 
@@ -363,15 +366,17 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
 
   pi.registerShortcut("ctrl+alt+p", {
     description: "Select model and thinking level",
-    handler: async (ctx) => {
+    handler: (ctx) => withSelectorDiagnostics(getAgentDir(), async () => {
       const [modelData, loadedFavoriteStore] = await Promise.all([
         getSelectableModelData(ctx),
         loadFavoriteModelStore(),
       ]);
+      await writeSelectorDiagnostic(getAgentDir(), "models loaded");
       let favoriteStore = loadedFavoriteStore;
       let models = buildSelectableModels(modelData, favoriteStore);
 
       if (models.length === 0) {
+        await writeSelectorDiagnostic(getAgentDir(), "no configured models available");
         ctx.ui.notify("No configured models available", "warning");
         return;
       }
@@ -382,6 +387,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
         models.findIndex((item) => getModelKey(item.provider, item.modelId) === currentModelKey),
       );
 
+      await writeSelectorDiagnostic(getAgentDir(), "opening picker");
       const result = await ctx.ui.custom<{ model: AvailableModelItem; thinking: ThinkingLevel } | null>(
         (tui, theme, _kb, done) => {
           let modelIndex = initialIndex;
@@ -480,6 +486,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             try {
               await persistFavoriteModelStore(favoriteStore);
             } catch (error) {
+              await writeSelectorDiagnostic(getAgentDir(), "favorite update failed", error);
               favoriteStore = previousStore;
               models = buildSelectableModels(modelData, favoriteStore);
               modelIndex = Math.max(
@@ -696,6 +703,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
         },
       );
 
+      await writeSelectorDiagnostic(getAgentDir(), result ? "picker selected model" : "picker cancelled");
       if (!result) return;
 
       const { provider, modelId, model } = result.model;
@@ -703,8 +711,10 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
       const modelChanged = !ctx.model || ctx.model.provider !== provider || ctx.model.id !== modelId;
 
       if (modelChanged) {
+        await writeSelectorDiagnostic(getAgentDir(), "applying model");
         const ok = await pi.setModel(model);
         if (!ok) {
+          await writeSelectorDiagnostic(getAgentDir(), `no API key for ${selectedKey}`);
           ctx.ui.notify(`No API key for ${selectedKey}`, "error");
           return;
         }
@@ -712,6 +722,6 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
 
       pi.setThinkingLevel(result.thinking);
       ctx.ui.notify(`Switched to ${selectedKey} / effort ${pi.getThinkingLevel()}`, "info");
-    },
+    }),
   });
 }

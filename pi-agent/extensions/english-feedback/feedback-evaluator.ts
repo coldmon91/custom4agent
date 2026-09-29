@@ -5,7 +5,7 @@ import {
   type Model,
 } from "@earendil-works/pi-ai";
 import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
-import { FEEDBACK_SYSTEM_PROMPT } from "./feedback-policy";
+import { extractCompleteJsonObject, FEEDBACK_SYSTEM_PROMPT } from "./feedback-policy.ts";
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_OUTPUT_TOKENS = 256;
@@ -47,8 +47,27 @@ export async function evaluateFeedback(
       },
     );
 
-    for await (const _event of stream) {
-      // Consuming the stream drives the provider request to completion.
+    // The response is a single small JSON object, so the stream is aborted as
+    // soon as that object is complete instead of waiting for finalization.
+    let bufferedText = "";
+    let extracted: string | undefined;
+    try {
+      for await (const event of stream) {
+        if (event.type !== "text_delta") continue;
+        bufferedText += event.delta;
+        const object = extractCompleteJsonObject(bufferedText);
+        if (object !== null) {
+          extracted = object;
+          controller.abort(new Error("English feedback JSON completed"));
+          break;
+        }
+      }
+    } catch {
+      // The abort above can surface as a stream error; the buffer stays
+      // authoritative when it already holds a complete object.
+    }
+    if (extracted !== undefined) {
+      return extracted;
     }
 
     const result = await stream.result();

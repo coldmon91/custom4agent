@@ -32,8 +32,3 @@
 ## Advanced
 - Phantom types: an unused generic param (`Temperature<Celsius>`) to encode units/state in the type system and block invalid conversions at compile time.
 - Retroactive conformance: `extension Int: Identifiable {}` to conform a type you don't own. Swift 6 warns without `@retroactive`; only do it for types+protocols you both control-ish, as two modules adding the same conformance collide.
-
-## Best Practices
-- Protocols over base classes; single-responsibility, small, composed protocols.
-- `some` for implementation hiding; `any`/type erasure only when storing mixed types.
-- Declare a method in the protocol body (not just the extension) when conformers must be able to override it.

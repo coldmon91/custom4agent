@@ -19,11 +19,7 @@
 
 ## Mocking / test doubles
 - Depend on a `protocol`, inject the real impl in prod and a double in tests — the core testability lever.
-- Mock — records calls + flags (`fetchCalled`, captured args) and returns configured results/errors; assert on interactions.
-- Stub — returns canned responses (e.g. a `Result` property).
-- Spy — records interactions on a real-ish object (delegate call counts).
-- Fake — lightweight working impl (in-memory dict as a DB).
-- Directive: pick by intent — verifying interactions → mock/spy; supplying inputs → stub/fake.
+- Pick by intent: verifying interactions → mock/spy (record calls and arguments); supplying inputs → stub/fake (canned results, in-memory implementation).
 
 ## Performance testing (XCTest only)
 - `measure { }` — baseline timing. `measure(metrics:options:)` with `XCTClockMetric`, `XCTCPUMetric`, `XCTMemoryMetric`, `XCTStorageMetric`; `XCTMeasureOptions().iterationCount`.
@@ -53,9 +49,3 @@ xcodebuild test \
 swift test
 swift test --filter UserTests
 ```
-
-## Best Practices
-- `@testable import` for internals; one concept per test; Given-When-Then.
-- Name `test_method_condition_expectedResult`.
-- Inject via protocols; test edge/error cases; keep tests fast and independent.
-- New unit tests on Xcode 16+ → Swift Testing (`@Test`/`#expect`); XCTest for UI/perf.

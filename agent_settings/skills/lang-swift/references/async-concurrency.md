@@ -26,7 +26,6 @@
 - `Task.detached` — inherits nothing (no actor, no priority, no task-locals). Use sparingly; breaks structured concurrency. Only when you deliberately need to escape the current context.
 - Gotcha: `Task { }` capturing `self` in a class holds it strongly until the task finishes. Use `[weak self]` for long-lived/cancellable tasks, and store the `Task` handle to `.cancel()` it (e.g. on `deinit` or restart).
 - Cancellation is cooperative: `try Task.checkCancellation()` (throws `CancellationError`) or check `Task.isCancelled` in loops. Cancellation does not preempt — you must poll.
-- Priorities: `.high` / `.medium` / `.low` / `.background` / `.utility` / `.userInitiated`.
 
 ## AsyncSequence / AsyncStream
 - `for await x in seq` (or `for try await`) — consume async sequences; `break` to stop early.
@@ -45,10 +44,3 @@
 - `withCheckedThrowingContinuation` / `withCheckedContinuation` — wrap a completion-handler API as `async`. `checked` variant traps on the bug of resuming twice / never.
 - Gotcha: a continuation MUST be resumed exactly once. Zero resumes = permanent leak/hang; two = crash (checked) or UB (unsafe).
 - `withUnsafeContinuation` — drops the double-resume checks; only for measured hot paths after correctness is proven.
-
-## Best Practices
-- Actors for shared mutable state; `@MainActor` for UI.
-- Structured (`async let`, task groups) over detached tasks.
-- Poll cancellation in long-running loops.
-- Mark types `Sendable` when genuinely safe; avoid `@unchecked` unless guarding with a lock.
-- Never block (sync sleep, semaphore wait) inside an async context.

@@ -1,8 +1,5 @@
 # Template Metaprogramming
 
-Keyword-directed guidance. Names the technique + when to reach for it (and the
-modern replacement to prefer). Generate code from the named construct.
-
 ## Variadic Templates & Fold Expressions (C++17)
 
 - Fold expression `(args + ...)` / `(... op args)` — prefer over recursive variadic
@@ -46,16 +43,3 @@ modern replacement to prefer). Generate code from the named construct.
 - Lazy-evaluate operator chains (`a = b + c + d`) to eliminate temporaries. High
   complexity — reach for it only in numeric/matrix hot paths where temporaries dominate;
   otherwise prefer ranges/views or a library (Eigen).
-
-## Quick Reference
-
-| Technique | Use Case | Performance |
-|-----------|----------|-------------|
-| Variadic Templates | Variable arguments | Zero overhead |
-| SFINAE | Conditional compilation | Compile-time |
-| if constexpr | Type-based branching | Zero overhead |
-| CRTP | Static polymorphism | No vtable cost |
-| Expression Templates | Lazy evaluation | Eliminates temps |
-| Type Traits | Type introspection | Compile-time |
-| Fold Expressions | Parameter pack ops | Optimal |
-| Template Specialization | Type-specific impl | Zero overhead |

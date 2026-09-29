@@ -22,16 +22,11 @@
 
 ## Performance
 - `lazy var` — defer expensive one-time computation until first access. Not thread-safe; don't use on types touched concurrently.
-- Batch type checks: `items.compactMap { $0 as? User }` once, not `as?` per iteration inside the loop.
 - Prefer arrays of structs over arrays of classes for hot data — contiguous memory, no pointer chasing / ARC per element.
 - `reserveCapacity(n)` before a known-size append loop to avoid repeated reallocations.
 - Build strings via `map{}.joined()` or `reserveCapacity` + `append`, never `+=` in a loop (allocates each time).
-- `enumerated()` over `0..<count` + subscript when you need index+value.
 
 ## Collection Choice
-- `Array` — ordered, random access O(1), append amortized O(1).
-- `Set` — membership O(1), unique, unordered. Use when doing repeated `contains`.
-- `Dictionary` — key→value O(1) lookup.
 - `ContiguousArray<T>` — for perf-critical numeric/struct data; avoids bridging overhead of `Array` with class/`@objc` elements.
 
 ## Profiling & Memory Pressure
@@ -41,13 +36,6 @@
 - Directive: always measure with Instruments (Allocations, Leaks, Time Profiler) before optimizing.
 
 ## Optimization Attributes & Flags
-- `-O` — release optimization (whole-module in release builds). Set per-target `swiftSettings` `.unsafeFlags(["-O"], .when(configuration: .release))` in Package.swift only if overriding defaults.
 - `@inlinable` — expose a function body across module boundaries for cross-module inlining (public API perf); locks the impl into your ABI.
 - `@inline(__always)` — force inline a tiny hot function. `@inline(never)` — keep out of inlining (clearer stack traces / debugging).
 - `@_specialize(where T == Int)` — underscore/experimental; generate a monomorphized version of a generic. Use only if profiling proves generic dispatch is the bottleneck.
-
-## Best Practices
-- Value types by default; `weak` for delegates; `unowned` only when lifetime guaranteed.
-- Capture list on any escaping closure referencing `self`.
-- Measure before optimizing; reserve capacity when size known.
-- Implement CoW only for large value types with reference-typed storage.

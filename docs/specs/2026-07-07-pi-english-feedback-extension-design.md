@@ -83,17 +83,23 @@ Pi의 custom entry는 모델 context에 포함되지 않으므로 이후 메인 
 ```text
 pi-agent/extensions/english-feedback/
 ├── index.ts
+├── feedback-cache.ts
+├── feedback-config.ts
 ├── feedback-evaluator.ts
 ├── feedback-policy.ts
 ├── feedback-renderer.ts
+├── feedback-cache.test.ts
+├── feedback-config.test.ts
 └── feedback-policy.test.ts
 ```
 
-- `index.ts`: Pi 입력·메시지·턴 이벤트 연결, 활성 모델 확인, 평가 결과와 사용자 메시지 대응, custom entry 추가
-- `feedback-evaluator.ts`: 독립 모델 transcript 구성, 스트림 소비, 모델 응답 반환
-- `feedback-policy.ts`: 평가 prompt, backtick masking, 대상 사전 검사, JSON 파싱과 결과 정규화
+- `index.ts`: Pi 입력·메시지·턴 이벤트 연결, 모델 확인과 설정, 캐시 조회, 평가 결과와 사용자 메시지 대응, custom entry 추가
+- `feedback-evaluator.ts`: 독립 모델 transcript 구성, 스트림 소비와 JSON 완성 시점 조기 중단, 모델 응답 반환
+- `feedback-policy.ts`: 평가 prompt, backtick masking, 대상 사전 검사, JSON 완성 객체 추출과 파싱, 결과 정규화
+- `feedback-cache.ts`: 동일 입력 판정 결과의 세션 범위 TTL 캐시
+- `feedback-config.ts`: 평가 모델 지정 sidecar JSON 파일 로딩 (`feedback-config.json`)
 - `feedback-renderer.ts`: `English: ...` TUI 렌더링
-- `feedback-policy.test.ts`: 외부 모델 없이 실행 가능한 순수 정책 테스트
+- `feedback-*.test.ts`: 외부 모델 없이 실행 가능한 순수 정책·캐시·설정 파싱 테스트
 
 이벤트 연결, 모델 호출, 정책, 렌더링을 분리하여 모델 응답 파싱과 안전 규칙을 터미널 및 네트워크 없이 검증한다.
 
@@ -103,18 +109,19 @@ pi-agent/extensions/english-feedback/
 2. `input` 이벤트에서 extension 주입, slash command, 사용자 셸 명령을 제외한다.
 3. `index.ts`가 활성 모델과 텍스트 입력 조건을 확인한다.
 4. `feedback-policy.ts`가 backtick 구간을 placeholder로 바꾸고 빈 입력과 명백한 비자연어 입력을 제외한다.
-5. `feedback-evaluator.ts`가 정규화된 자연어와 placeholder만 사용하여 `ctx.modelRegistry.streamSimple()`로 현재 `ctx.model`을 독립 호출한다.
-6. 평가 모델이 피드백 유무와 영어 문장을 JSON으로 반환한다.
-7. `feedback-policy.ts`가 응답을 파싱하고 길이, 형식, placeholder 보존 여부를 검증한다.
-8. 인라인 코드 placeholder는 원문으로 복원하고 fenced code block placeholder는 결과에서 제거한다.
-9. 피드백이 있으면 원본 입력과 함께 최대 60초 동안 메모리에 보관한다.
-10. 해당 user `message_end` 이벤트가 발생하면 피드백을 다음 턴 출력 대상으로 이동한다.
-11. user message가 세션에 저장된 뒤 발생하는 `turn_start`에서 `pi.appendEntry("english-feedback", ...)`를 호출한다.
-12. `feedback-renderer.ts`가 메인 답변 전에 `English: ...`를 렌더링한다.
-13. 메인 에이전트는 원래 prompt와 기존 context로 본래 작업을 수행한다.
+5. 동일 원문 입력의 캐시된 판정(`feedback: null` 포함)이 있으면 모델 호출 없이 그 결과를 사용한다.
+6. `feedback-evaluator.ts`가 정규화된 자연어와 placeholder만 사용하여 `ctx.modelRegistry.streamSimple()`로 지정 또는 현재 모델을 독립 호출한다.
+7. 평가 모델이 피드백 유무와 영어 문장을 JSON으로 반환한다.
+8. `feedback-evaluator.ts`가 최상위 JSON 객체가 완성되는 즉시 스트림을 중단하고 그 객체만 반환한다.
+9. `feedback-policy.ts`가 응답을 파싱하고 길이, 형식, placeholder 보존 여부를 검증한다.
+10. 인라인 코드 placeholder는 원문으로 복원하고 fenced code block placeholder는 결과에서 제거한다.
+11. 판정을 캐시에 저장하고, 피드백이 있으면 원본 입력과 함께 최대 60초 동안 메모리에 보관한다.
+12. 해당 user `message_end` 이벤트에서 원문 일치 피드백을 즉시 custom entry로 추가한다. 확장 핸들러가 사용자 메시지 저장 전에 실행되므로 append는 한 macrotask 뒤로 미뤄 사용자 메시지 바로 아래에 배치된다.
+13. `feedback-renderer.ts`가 메인 답변 전에 `English: ...`를 렌더링한다.
+14. 메인 에이전트는 원래 prompt와 기존 context로 본래 작업을 수행한다.
 
 교정 호출을 `input` 처리 중 기다리므로 피드백 준비가 끝난 뒤 원래 입력 처리가 계속된다.
-`message_end`와 `turn_start`를 분리해 custom entry가 사용자 메시지 뒤에 저장되도록 한다.
+피드백은 대응 user 메시지 저장 직후 즉시 entry로 기록되므로, 진행 중 제출(steering)이나 턴의 마지막 입력에서도 유실되지 않는다.
 그 대가로 입력 제출과 메인 응답 시작이 교정 호출 시간만큼 늦어진다.
 처리되지 않거나 취소된 입력의 대기 결과는 다음 입력과 잘못 연결되지 않도록 원문 일치와 60초 만료 조건을 적용한다.
 
@@ -168,14 +175,24 @@ fenced code block placeholder는 주변 자연어의 위치를 모델이 이해�
 
 ## 평가 모델 호출
 
-모델은 호출 시점의 `ctx.model`을 사용한다.
+모델은 기본적으로 호출 시점의 `ctx.model`을 사용한다.
 사용자가 `/model`로 모델을 변경하면 다음 입력부터 교정 호출도 새 모델을 따른다.
-별도의 provider, 인증 또는 모델 설정은 추가하지 않는다.
 
+`feedback-config.json`으로 평가 모델을 지정할 수 있다.
+파일은 확장 디렉터리에 두고 mtime이 바뀔 때마다 다시 읽는다.
+파일이 없거나 형식이 잘못되면 활성 모델로 되돌아가고 문제를 1회 경고한다.
+
+```json
+{ "model": "provider/model-id" }
+```
+
+지정 모델은 registry에서 찾을 수 있고 provider 인증이 구성된 경우에만 사용한다.
+찾을 수 없거나 인증이 없으면 활성 모델로 되돌아간다.
+로컬 provider(예: ollama)는 확장 코드 변경 없이 pi 전역 `~/.pi/agent/models.json`에 등록하고 이 설정에서 참조한다.
 호출 옵션:
 
 - tools 없음
-- `clampThinkingLevel(ctx.model, "off")`로 계산한 최저 지원 reasoning 수준(`off`이면 옵션 생략)
+- `clampThinkingLevel(평가 모델, "off")`로 계산한 최저 지원 reasoning 수준(`off`이면 옵션 생략)
 - 최대 출력 256 tokens
 - 요청 timeout 10초
 - 재시도 없음
@@ -184,6 +201,7 @@ fenced code block placeholder는 주변 자연어의 위치를 모델이 이해�
 교정은 짧은 분류와 단문 생성 작업이므로 reasoning과 긴 출력이 필요하지 않다.
 고정 한도는 비용, 지연, 비정상 장문 출력을 제한한다.
 `clampThinkingLevel()`을 사용하여 `off`를 지원하지 않는 모델에는 최저 지원 수준을 전달하고, 결과가 `off`이면 reasoning 옵션을 생략한다.
+응답은 단일 JSON 객체이므로 스트림 `text_delta`를 누적하다가 최상위 객체가 완성되는 즉시 요청을 중단하고, 마무리 토큰과 사용량 수신을 기다리지 않는다.
 
 ## 평가 프로토콜
 
@@ -210,9 +228,22 @@ fenced code block placeholder는 주변 자연어의 위치를 모델이 이해�
 - 입력의 모든 placeholder가 각각 정확히 한 번 유지됨
 - 알 수 없거나 중복된 placeholder가 없음
 - 인라인 원문 복원과 fenced placeholder 제거 후 최종 피드백이 2,000자 이하
-- 예상하지 않은 설명, 코드 펜스 또는 추가 본문 없음
+- 첫 완성 JSON 객체가 채택 대상이며, 조기 중단으로 객체 뒤 내용은 검증 대상에서 제외됨
 
 엄격한 프로토콜을 사용하여 모델의 설명이나 prompt injection 결과가 TUI에 임의의 장문으로 표시되는 것을 막는다.
+스트림 조기 중단은 완성된 첫 객체만 채택하므로 객체 뒤의 추가 본문은 존재 여부를 확인할 수 없고, 그 객체 자체의 엄격 검증은 동일하게 적용된다.
+
+## 동일 입력 캐시
+
+세션별 메모리 캐시가 같은 입력의 반복 평가를 건너뛴다.
+
+- 키는 trim한 원본 입력이며, placeholder 복원 결과가 입력별 코드에 의존하므로 masking 후 자연어가 아닌 원문을 기준으로 한다
+- 값은 피드백 문자열 또는 `null` 판정이며, `null`은 "피드백 불필요" 결정으로 재호출을 건너뛴다
+- TTL은 5분이고 최대 50개를 유지하며 초과 시 가장 오래된 항목을 제거한다
+- `session_start`에서 비운다
+- 형식이 잘못된 응답(`invalid` 판정)은 캐시하지 않는다
+
+캐시는 프로세스 메모리에만 존재하고 세션 파일이나 디스크에 기록되지 않는다.
 파싱 실패는 피드백 없음으로 처리한다.
 
 ## TUI entry와 세션 저장
@@ -252,16 +283,26 @@ custom entry는 세션 JSONL에 남아 `/resume` 후에도 다시 렌더링되�
 
 오류를 custom message나 사용자 prompt로 전달하지 않는다.
 교정 보조 기능의 실패가 본래 작업을 방해하면 안 되기 때문이다.
-반복 오류 알림과 자동 재시도도 두지 않는다.
+다만 같은 원인의 오류는 최초 1회 TUI 경고로 알린다.
+- 설정 파일 형식 문제
+- 지정 모델 미발견 또는 인증 없음(활성 모델로 폴백)
+- 평가 호출 실패(400, 네트워크, timeout 등)
+동일한 오류 메시지는 세션당 한 번만 경고하고, 이후에는 조용히 건너뛴다.
+자동 재시도는 두지 않는다.
 매 입력의 지연과 TUI 노이즈가 증가하기 때문이다.
+
+평가 호출이 끝나면 결과와 소요 시간을 info 알림으로 남긴다.
+- 형식: `english-feedback: evaluated in <ms> ms (<outcome>)`
+- `outcome`은 `feedback`, `no feedback`, `invalid response` 중 하나
+캐시 적중은 알리지 않고 실제 모델 호출에만 남겨 실행 여부와 지연을 관측 가능하게 한다.
 
 세션 수명보다 긴 타이머, 프로세스, 소켓을 만들지 않는다.
 timeout 타이머는 요청 완료 또는 실패 시 항상 해제한다.
 
 ## 비용과 성능 영향
 
-- 대상 입력마다 현재 모델 API 호출 1회 추가
-- 메인 응답 시작 전에 최대 10초의 추가 대기 가능
+- 대상 입력마다 현재 모델 API 호출 1회 추가(동일 입력 5분 이내 재제출 시 캐시로 생략)
+- 메인 응답 시작 전에 최대 10초의 추가 대기 가능(응답이 짧은 경우 JSON 완성 즉시 중단으로 단축)
 - backtick 내용을 제외한 최대 자연어 입력 4,000자와 최대 출력 256 tokens
 - 메인 context token 사용량 증가 없음
 - 세션 파일에는 짧은 custom entry만 추가
@@ -299,6 +340,10 @@ backtick 내용을 제거한 사용자 자연어는 메인 호출과 동일한 �
 - `feedback: null` 파싱
 - 정상 피드백 문자열 파싱과 공백 정규화
 - 빈 피드백 거부
+- JSON 완성 객체 추출(불완전 입력, 문자열 내 중괄호와 따옴표, 선행·추가 본문)
+- `none`/`feedback`/`invalid` 판정 구분
+- 캐시 miss와 `null` 판정 구분, TTL 만료, 최대 항목 제거
+- `provider/modelId` 파싱
 - 코드 펜스와 추가 본문 거부
 - 잘못된 JSON 거부
 - 1,000자 초과 피드백 거부

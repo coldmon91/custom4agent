@@ -1,9 +1,5 @@
 # Modern C++20/23 Features
 
-Keyword-directed guidance. Each entry names the construct, its standard, and a
-decision (prefer / avoid / gotcha) — not a tutorial. Generate the code from the
-named construct; the value here is *which* to reach for and *when not to*.
-
 ## Concepts and Constraints (C++20)
 
 - `concept` + `requires` — replace SFINAE / `enable_if`. Prefer standard concepts
@@ -62,18 +58,3 @@ named construct; the value here is *which* to reach for and *when not to*.
 
 - `std::expected<T, E>` (C++23) for recoverable errors — do NOT mix exceptions and error
   codes inconsistently. `std::optional` when there is no error payload.
-
-## Quick Reference
-
-| Feature | C++17 | C++20 | C++23 |
-|---------|-------|-------|-------|
-| Concepts | - | ✓ | ✓ |
-| Ranges | - | ✓ | ✓ |
-| Coroutines | - | ✓ | ✓ |
-| Modules | - | ✓ | ✓ |
-| Spaceship | - | ✓ | ✓ |
-| std::format | - | ✓ | ✓ |
-| std::expected | - | - | ✓ |
-| std::print | - | - | ✓ |
-| Deducing this | - | - | ✓ |
-| std::generator | - | - | ✓ |

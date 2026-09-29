@@ -192,35 +192,76 @@ function restorePlaceholders(
   return restored.trim();
 }
 
-export function parseFeedbackResponse(
+export type FeedbackDecision =
+  | { kind: "none" }
+  | { kind: "feedback"; text: string }
+  | { kind: "invalid" };
+
+/**
+ * Returns the first complete top-level JSON object in `text`, or null while
+ * incomplete. String-aware so braces and quotes inside the feedback text do
+ * not end the scan early.
+ */
+export function extractCompleteJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start < 0) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < text.length; index++) {
+    const character = text[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (character === "\\") {
+        escaped = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (character === '"') {
+      inString = true;
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, index + 1);
+    }
+  }
+  return null;
+}
+
+export function parseFeedbackDecision(
   responseText: string,
   placeholders: readonly FeedbackPlaceholder[],
-): string | null {
+): FeedbackDecision {
   let value: unknown;
   try {
     value = JSON.parse(responseText.trim());
   } catch {
-    return null;
+    return { kind: "invalid" };
   }
 
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return null;
+    return { kind: "invalid" };
   }
 
   const record = value as Record<string, unknown>;
   if (Object.keys(record).length !== 1 || !("feedback" in record)) {
-    return null;
+    return { kind: "invalid" };
   }
   if (record.feedback === null) {
-    return null;
+    return { kind: "none" };
   }
   if (typeof record.feedback !== "string") {
-    return null;
+    return { kind: "invalid" };
   }
 
   const normalized = normalizeWhitespace(record.feedback);
   if (!normalized || codePointLength(normalized) > MAX_MODEL_FEEDBACK_LENGTH) {
-    return null;
+    return { kind: "invalid" };
   }
 
   const restored = restorePlaceholders(normalized, placeholders);
@@ -229,8 +270,16 @@ export function parseFeedbackResponse(
     || codePointLength(restored) > MAX_RENDERED_FEEDBACK_LENGTH
     || /[\u0000-\u001f\u007f]/u.test(restored)
   ) {
-    return null;
+    return { kind: "invalid" };
   }
 
-  return restored;
+  return { kind: "feedback", text: restored };
+}
+
+export function parseFeedbackResponse(
+  responseText: string,
+  placeholders: readonly FeedbackPlaceholder[],
+): string | null {
+  const decision = parseFeedbackDecision(responseText, placeholders);
+  return decision.kind === "feedback" ? decision.text : null;
 }

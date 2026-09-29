@@ -1,14 +1,11 @@
 # Concurrency and Parallel Programming
 
-Keyword-directed guidance. Names the primitive + when to use it. The memory-ordering
-semantics table is kept literal — the meaning of each ordering is the information.
-
 ## Atomics & Memory Ordering
 
 - `std::atomic<T>` for lock-free shared state; `fetch_add` / `compare_exchange_weak|strong`
   for RMW. CAS loops use `_weak` (may spuriously fail, cheaper in a loop).
 - Producer publishes with `release`, consumer reads with `acquire` — this pair establishes
-  happens-before. `relaxed` only for independent counters. Default to `seq_cst` unless a
+  happens-before; `acq_rel` for RMW that does both. `relaxed` only for independent counters. Default to `seq_cst` unless a
   benchmark justifies weakening.
 - `compare_exchange_strong` outside loops (no spurious failure).
 
@@ -100,26 +97,3 @@ answer it.
   value across threads; `std::packaged_task` to wrap a callable's result in a future.
 - Coroutines (`co_await`/`co_return`, custom `promise_type`) for async I/O with minimal
   overhead — prefer a coroutine library (cppcoro, asio) over hand-rolled awaiters.
-
-## Quick Reference
-
-| Primitive | Use Case | Performance |
-|-----------|----------|-------------|
-| std::atomic | Simple shared state | Lock-free |
-| std::mutex | Exclusive access | Kernel call |
-| std::shared_mutex | Read-heavy workload | Better than mutex |
-| Lock-free structures | High contention | Best throughput |
-| Thread pool | Task parallelism | Avoid thread overhead |
-| Parallel STL | Data parallelism | Automatic scaling |
-| std::async | Simple async tasks | Thread pool |
-| Coroutines | Async I/O | Minimal overhead |
-
-## Memory Ordering Guide
-
-| Ordering | Guarantees | Use Case |
-|----------|-----------|----------|
-| relaxed | No synchronization | Counters |
-| acquire | Load barrier | Consumer |
-| release | Store barrier | Producer |
-| acq_rel | Both | RMW operations |
-| seq_cst | Total order | Default |

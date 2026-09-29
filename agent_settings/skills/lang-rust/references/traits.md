@@ -2,43 +2,34 @@
 
 ## Core decisions
 
-- **Generics/`impl Trait` (static dispatch) vs `dyn Trait` (dynamic dispatch):** default to generics — monomorphization gives zero-cost, inlinable calls. Reach for `dyn` (`Box<dyn Trait>`, `&dyn Trait`) only when you need a heterogeneous collection (`Vec<Box<dyn Draw>>`), want to shrink code bloat, or must cross an ABI/plugin boundary. `dyn` costs a vtable indirection and blocks inlining.
-- **Associated type vs generic type parameter:** use an **associated type** when there is exactly one logical impl per type (`Iterator::Item`). Use a **generic parameter** when a type can implement the trait for many parameters (`From<T>`, `Add<Rhs>`). Associated types keep signatures clean and forbid conflicting impls.
-- Default method bodies in the trait let implementors override selectively — put shared logic there.
+- **Generics / `impl Trait` vs `dyn Trait`:** default to generics (monomorphized, inlinable). Use `dyn` only for heterogeneous collections, code-size reduction, or plugin/ABI boundaries — it costs a vtable indirection and blocks inlining. Prefer an enum when the set of variants is closed and known.
+- **Associated type vs generic parameter:** associated type when there is exactly one logical impl per type (`Iterator::Item`); generic parameter when a type implements the trait for many parameters (`From<T>`, `Add<Rhs>`).
+- Keep traits small and single-purpose; a fat trait is hard to implement and to keep `dyn`-compatible.
 
 ## Object safety (dyn-compatibility)
 
-- A trait is `dyn`-compatible only if no method is generic (`fn f<T>(&self)`), takes `self` by value (unless `Self: Sized`), or returns `Self`. Native `async fn` and `impl Trait` in return position also break it.
-- Fix: add `where Self: Sized` to the offending method to exclude it from the vtable, or split the trait.
+- Broken by: generic methods, `self` by value (without `Self: Sized`), returning `Self`, native `async fn`, and return-position `impl Trait`.
+- Fix: `where Self: Sized` on the offending method, or split the trait.
 
-## Bounds and where clauses
+## Bounds and coherence
 
-- Prefer a `where` clause over inline `T: A + B` once bounds get long — it reads better and is required for bounds on associated types (`where T::Item: Display`).
-- The **orphan rule:** you can `impl Trait for Type` only if your crate defines the trait or the type. To impl a foreign trait on a foreign type, use the **newtype** wrapper.
-- **Blanket impl** (`impl<T: Display> MyTrait for T`) applies a trait to every type meeting a bound — powerful for extension traits, but it's a permanent commitment (removing/narrowing it is a breaking change) and can conflict with other impls.
+- Switch to a `where` clause once bounds get long; it is required for bounds on associated types (`where T::Item: Display`). For bound lists repeated everywhere, define a custom trait that aggregates them.
+- **Orphan rule:** `impl Trait for Type` requires your crate to own the trait or the type. For a foreign trait on a foreign type, use a newtype.
+- **Blanket impls** (`impl<T: Display> MyTrait for T`) are a permanent commitment — removing or narrowing one is a breaking change.
 
-## Standard traits to implement
+## Standard traits
 
-- Derive freely: `#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]`. `Copy` only for small, plain-old-data types (implies `Clone`, cheap bitwise copy).
-- Implement `Debug` on essentially every public type for diagnosability; `Default` when a sensible zero-config value exists.
-- `From`/`Into`: implement `From`; `Into` comes free via blanket impl. Accept `impl Into<T>` in constructors for ergonomic conversions. Use `TryFrom`/`TryInto` for fallible conversions (return `Result`) — never `as` for narrowing.
-- Operator overloading via `std::ops::{Add, Mul, ...}`; keep semantics unsurprising (don't make `+` do I/O).
+- Derive freely: `Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord`. `Copy` only for small plain-data types.
+- `Debug` on every public type; `Default` when a sensible zero-config value exists — prefer `Default` + struct-update syntax over a builder when all fields are optional.
+- Implement `From` (you get `Into` for free); accept `impl Into<T>` in constructors. Fallible conversion → `TryFrom`, never `as`.
+- Keep operator overloads (`std::ops`) unsurprising.
+- Don't use `Deref` on a wrapper to emulate inheritance — implicit method resolution surprises callers. Implement the needed traits or `AsRef` explicitly.
 
 ## Trait design patterns
 
-- **Extension trait:** add methods to a foreign type (`impl MyExt for str`) — the idiomatic way around the orphan rule for behavior.
-- **Sealed trait:** a public trait bounded on a private `sealed::Sealed` supertrait prevents downstream crates from implementing it (lets you add methods later without breaking them).
-- **Supertrait** (`trait Loggable: Display`): require and call another trait's methods; expresses "is-a" prerequisites.
-- **Marker traits** (`Send`, `Sync`, or custom empty traits) encode compile-time-only guarantees; combine with `PhantomData<T>` to tie unused type params / variance to a struct.
-- **Associated constants** (`const MAX: usize`) attach per-impl constants to a trait.
-
-## Advanced (know they exist)
-
-- **GATs** (`type Item<'a> where Self: 'a;`, stable since 1.65) — associated types parameterized by lifetime/type; enables lending iterators. Reach for them rarely; they complicate signatures.
-- **Const trait impls** (`#[const_trait]`, `impl const`) are **nightly** — don't rely on them in production.
-
-## Best practices
-
-- Keep traits small and single-purpose; a fat trait is hard to implement and to make `dyn`-safe.
-- Prefer static dispatch for hot paths, `dyn` for flexibility/binary size.
-- Document invariants an implementor must uphold, especially for `unsafe` traits.
+- **Extension trait:** add methods to a foreign type (`impl MyExt for str`).
+- **Sealed trait:** public trait with a private `sealed::Sealed` supertrait so downstream crates can't implement it (lets you add methods later).
+- **Marker traits + `PhantomData<T>`:** compile-time-only guarantees; tie unused type params or variance to a struct.
+- **GATs** (`type Item<'a> where Self: 'a;`) enable lending iterators — use rarely, they complicate signatures.
+- Const trait impls (`#[const_trait]`) are nightly — don't rely on them.
+- Document invariants an implementor must uphold, especially for `unsafe trait`.

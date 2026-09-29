@@ -1,103 +1,91 @@
 ---
 name: lang-rust
-description: Panic-defense and memory-safety-first Rust skill for writing, reviewing, and debugging Rust code. Prioritises eliminating runtime panics (indexing, arithmetic overflow, unwrap/expect, RefCell conflicts) and undefined behavior above all else, then covers idiomatic ownership/borrowing/lifetimes, trait design, async with tokio, error handling, testing, idioms, anti-patterns, design patterns, and functional techniques. Use when building Rust applications, hardening code against panics, auditing for memory safety, solving ownership or borrowing issues, designing trait-based APIs, implementing async/await concurrency, creating FFI bindings, or when the user asks about Rust idioms, patterns, anti-patterns, or functional programming. Invoke for Rust, Cargo, panic safety, memory safety, ownership, borrowing, lifetimes, traits, generics, async Rust, tokio, FFI, unsafe, zero-cost abstractions, systems programming.
+description: Use whenever writing, modifying, reviewing, or debugging Rust code — any `.rs` file, `Cargo.toml`, or Cargo workspace — even for a one-line edit, and when the user asks about Rust idioms or anti-patterns. Covers panic defense (indexing, arithmetic overflow, unwrap/expect, as casts, RefCell conflicts), memory safety and undefined behavior, ownership, borrowing, lifetimes, trait-based API design, generics, async with tokio, error handling, testing, FFI, and unsafe. Keywords - Rust, Cargo, rustc, clippy, panic safety, borrow checker, systems programming.
 ---
 
 # Rust
 
-Senior Rust expert covering Rust 2024 edition. **Safety comes first**: this skill treats panic defense and memory safety as the non-negotiable baseline, then builds reliable, high-performance software on top of Rust's ownership system, type system, and zero-cost abstractions.
+Rust 2024 edition. **Panic and memory safety come first**: when safety conflicts with idiom, brevity, or performance, safety wins.
+The only exception is a less-safe construct the user explicitly authorised (e.g. `unwrap()` in a throwaway script) — note the trade-off when you use it.
 
-## ⚠️ Safety-First Mandate (non-negotiable)
+Removing `unwrap`/`expect` does not eliminate panics. Safe Rust still panics via indexing, slicing, overflow, division by zero, `RefCell` conflicts, and explicit macros.
 
-Before writing, modifying, or reviewing ANY Rust code, you MUST:
+## Safety rules (production code)
 
-1. **Load `references/safe-rust.md` first** and apply its checklist to the work at hand.
-2. **Scan every fallible path** for panic sources — indexing/slicing, bare arithmetic, `unwrap`/`expect`, `as` casts, division, `RefCell` borrows, lock guards, `unsafe`.
-3. **Resolve conflicts in favour of safety.** When panic/memory safety conflicts with idiom, brevity, or performance, safety wins.
+**Panic avoidance**
+- `v.get(i)` / `v.get(a..b)` / `str::get` instead of `v[i]` / `&v[a..b]` on possibly-out-of-range values
+- `checked_*` / `saturating_*` / `wrapping_*` / `overflowing_*` instead of bare `+ - * / %` on untrusted or unbounded values; guard divisors with `checked_div` / `checked_rem`
+- `?` with `Result`/`Option` — no `unwrap`/`expect` outside tests (see `references/error-handling.md`)
+- `TryFrom` / `try_into` instead of `as` for narrowing conversions (`as` silently truncates)
+- No `panic!` / `todo!` / `unimplemented!` / `unreachable!` on live paths; a truly unreachable arm gets a justifying comment
+- Validate indices before `Vec::remove` / `insert` / `drain` / `split_off` / `swap`
+- `RefCell::try_borrow` when a conflict is possible; avoid `Rc<RefCell<T>>` sprawl
 
-The only exception is when the user has explicitly authorised a less-safe construct (e.g. `unwrap()` in a throwaway script). Note the trade-off when you do.
+**Invariants in types**
+- Parse, don't validate: convert untrusted input into a validated type once, at the boundary
+- Newtype (`struct UserId(u64)`), enum state machines, `NonZero*` so illegal states don't compile
+- Smart constructor `fn new(..) -> Result<Self, _>` or `TryFrom` for validated types
 
-## Always load first
+**Concurrency**
+- Prefer channels over shared state; otherwise `Arc<Mutex<T>>` / `Arc<RwLock<T>>` with minimal lock scope
+- Never hold a lock guard across `.await`
+- Decide an explicit poisoning policy — never blindly `lock().unwrap()`
+- Acquire multiple locks in a globally consistent order
+- No `unsafe impl Send/Sync` without a proven invariant
 
-| Topic | File | Why |
-|-------|------|-----|
-| **Safe Rust** | `references/safe-rust.md` | Panic avoidance, integer overflow, safe indexing, unsafe isolation, concurrency safety, CI tooling, safety review checklist. **Read before any code work.** |
+**`unsafe` and FFI**
+- `#![forbid(unsafe_code)]` on crates that don't need it
+- Isolate unavoidable `unsafe` in a small module behind a safe API; every block gets a `// SAFETY:` comment stating the upheld invariant
+- FFI boundary: never let a panic unwind across it; pass only primitives, pointers, `#[repr(C)]` structs, or opaque handles; strings as pointer + length; memory is freed by the side that allocated it
+- Wrap foreign handles in an owning Rust type whose `Drop` frees them
 
-## Core Workflow
+**Resources**
+- Cleanup via RAII / `Drop`; teardown that can fail (e.g. `flush`) goes in an explicit method called before drop, since `Drop` cannot return errors
 
-1. **Identify panic paths & design for safety** — Scan for indexing, bare arithmetic, `unwrap`/`expect`, `as` casts, division, `RefCell`/lock usage, and `unsafe`; plan safe alternatives (`.get()`, `checked_*`, `?`, `TryFrom`) before writing
-2. **Analyze ownership** — Design lifetime relationships and borrowing patterns; annotate lifetimes explicitly where inference is insufficient
-3. **Design traits** — Create trait hierarchies with generics and associated types
-4. **Implement safely** — Write idiomatic Rust with minimal `unsafe`; document every `unsafe` block with its safety invariants
-5. **Handle errors** — Use `Result`/`Option` with `?` operator and custom error types via `thiserror` (libs) / `anyhow` (apps)
-6. **Validate** — Run `cargo clippy --all-targets --all-features -- -D warnings`, `cargo fmt --check`, `cargo test`, and `cargo miri test` where applicable; fix all warnings before finalising
+## Tooling
 
-## Reference Guide
+Crate root:
 
-Load detailed guidance based on the topic at hand (`safe-rust.md` is always loaded first — see above):
+```rust
+#![warn(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::panic,
+    clippy::todo,
+    clippy::unimplemented,
+)]
+#![forbid(unsafe_code)] // where feasible
+```
 
-### Implementation references
+Don't put `#![deny(warnings)]` in the crate (new compiler versions break the build); fail on warnings in CI instead.
+
+Validate before finishing:
+- `cargo fmt --check` (follow the repo's `rustfmt.toml`)
+- `cargo clippy --all-targets --all-features -- -D warnings`
+- `cargo test`
+- `cargo miri test` when `unsafe` is involved
+- `cargo audit` / `cargo deny` for dependencies; `cargo fuzz` for parsers of untrusted input
+
+## Review checklist
+
+- [ ] `[i]` indexing or `[a..b]` slicing on possibly-out-of-range values
+- [ ] Bare `+ - * / %` on untrusted or unbounded values
+- [ ] `unwrap` / `expect` outside tests
+- [ ] Truncating `as` casts
+- [ ] Errors dropped via `let _ =` or an ignored `Result`
+- [ ] Lock guards held across `.await` or nested lock acquisition
+- [ ] `unsafe` blocks without `// SAFETY:`
+- [ ] `RefCell` borrows that could conflict at runtime
+- [ ] Fallible cleanup hidden in `Drop`
+
+## References
 
 | Topic | File | Load when |
 |-------|------|-----------|
-| Ownership | `references/ownership.md` | Lifetimes, borrowing, smart pointers, `Pin` |
-| Traits | `references/traits.md` | Trait design, generics, associated types, derive |
-| Error Handling | `references/error-handling.md` | `Result`, `Option`, `?`, custom errors, `thiserror` |
-| Async | `references/async.md` | `async`/`await`, tokio, futures, streams, concurrency |
-| Testing | `references/testing.md` | Unit/integration tests, proptest, benchmarks |
-
-### Conceptual references
-
-| Topic | File | Load when |
-|-------|------|-----------|
-| Glossary | `references/glossary.md` | Defining ownership, borrowing, lifetime, trait, RAII, FFI |
-| Principles | `references/principles.md` | KISS, YAGNI, DRY, composition over inheritance, encapsulating unsafety |
-| Idioms | `references/idioms.md` | Borrowed types, `Default`, destructors, `mem::take`, on-stack dynamic dispatch, FFI idioms |
-| Anti-Patterns | `references/anti-patterns.md` | `clone()` overuse, `#![deny(warnings)]`, deref polymorphism |
-| Design Patterns | `references/design-patterns.md` | Behavioural, creational, structural, FFI patterns |
-| Functional | `references/functional.md` | Generics as type classes, optics, paradigm trade-offs |
-
-## Constraints
-
-### MUST DO — P0 (panic & memory safety, non-negotiable)
-- Use `.get()` / `.get_mut()` instead of `[i]` indexing and `&v[a..b]` slicing
-- Use explicit arithmetic (`checked_*` / `saturating_*` / `wrapping_*` / `overflowing_*`) instead of bare `+ - * / %` on untrusted or unbounded values
-- Propagate errors with `?`; return `Result`/`Option` — never `unwrap()`/`expect()` in production code
-- Convert integers with `TryFrom` / `try_into`, never `as` (which silently truncates)
-- No production `panic!` / `todo!` / `unimplemented!` / `unreachable!` on live paths
-- Minimise `unsafe`; apply `#![forbid(unsafe_code)]` where feasible and document every remaining `unsafe` block with a `// SAFETY:` invariant
-- Never hold a lock guard across `.await`; decide an explicit policy for lock poisoning
-- Never create memory leaks or dangling pointers
-
-### MUST DO — P1 (correctness & quality)
-- Use the type system for compile-time guarantees; encode invariants so illegal states are unrepresentable (newtype, enum state machines, `NonZero*`)
-- Handle all errors explicitly (`Result`/`Option`); never swallow with bare `let _ =`
-- Add documentation with examples
-- Run `cargo clippy -- -D warnings` and fix every warning
-- Enable panic-catching lints: `clippy::unwrap_used`, `expect_used`, `indexing_slicing`, `arithmetic_side_effects`, `panic`, `todo`, `unimplemented`
-- Use `cargo fmt` for consistent formatting
-- Write tests including doctests
-
-### MUST NOT DO
-- Use `unwrap()` or `expect()` in production code
-- Index/slice with `[]` on values that could be out of range
-- Use bare arithmetic where overflow or divide-by-zero is possible
-- Use `as` casts that can truncate (use `try_into`)
-- Use `unsafe` without documenting safety invariants
-- Ignore clippy warnings
-- Mix blocking and async code incorrectly; hold locks across `.await`
-- Skip error handling or swallow errors silently
-- Use `String` when `&str` suffices; clone unnecessarily (use borrowing)
-
-## Output Templates
-
-When implementing Rust features, provide:
-1. Type definitions (structs, enums, traits) that encode invariants
-2. Implementation with panic-safe operations and proper ownership
-3. Error handling with custom error types (`thiserror`/`anyhow`)
-4. Tests (unit, integration, doctests) covering boundary/failure cases
-5. Brief explanation of design decisions, calling out any residual panic risk
-
-## Knowledge Reference
-
-Rust 2024, Cargo, panic avoidance, integer overflow safety, safe indexing, safety review checklist, ownership/borrowing, lifetimes, traits, generics, async/await, tokio, `Result`/`Option`, `thiserror`/`anyhow`, serde, clippy, rustfmt, cargo-test, criterion benchmarks, MIRI, unsafe Rust, FFI, idioms, design patterns, anti-patterns, functional programming
+| Ownership | `references/ownership.md` | Lifetimes, borrowing, clone vs borrow, smart pointers, self-referential types |
+| Traits | `references/traits.md` | Trait design, generics vs `dyn`, object safety, orphan rule, derive |
+| Error Handling | `references/error-handling.md` | `Result`/`Option`, `?`, `thiserror` vs `anyhow` |
+| Async | `references/async.md` | tokio, `spawn`, `select!`, channels, cancellation, async traits |
+| Testing | `references/testing.md` | Unit/doc/integration tests, proptest, mockall, criterion |

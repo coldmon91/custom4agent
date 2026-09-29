@@ -9,7 +9,7 @@ Unavailable favorites continue to occupy a favorite slot until removed.
 
 Apply the behavior consistently to:
 
-- `pi-agent/extensions/model-thinking-selector.ts`, the active local extension
+- `pi-agent/extensions/model-thinking-selector/index.ts`, the active local extension
 - `pi-agent/packages/pi-model-thinking-selector`, the distributable package
 
 Do not expose every unavailable catalog model in the general model list.
