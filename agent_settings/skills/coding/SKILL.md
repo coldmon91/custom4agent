@@ -22,6 +22,13 @@ Load the matching skill before editing, alongside these rules.
 - Public API: compatibility report and approval first.
 - Update of all call sites in the same change; no partial migration.
 
+## Naming and Commenting
+
+- Name functions and variables so the intent is visible in the name itself.
+- If the name alone cannot convey the intent, supplement it with a comment.
+- If the name already conveys the intent, add no explanatory comment for it.
+- State the next tasks when work remains.
+
 ## Socket Programming
 
 - Fragmented arrival of TCP/TLS/UDP reads (e.g. 1000 bytes sent as 500+500).

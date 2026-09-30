@@ -61,8 +61,18 @@ Crate root:
 
 Don't put `#![deny(warnings)]` in the crate (new compiler versions break the build); fail on warnings in CI instead.
 
+Format with `cargo fmt`. Use the repo's `rustfmt.toml` when it exists. When it does not, these settings apply. Do not hand-format against the chosen config.
+
+```
+edition = "2024"
+max_width = 100
+tab_spaces = 4
+newline_style = "Unix"
+use_small_heuristics = "Default"
+```
+
 Validate before finishing:
-- `cargo fmt --check` (follow the repo's `rustfmt.toml`)
+- `cargo fmt --check`
 - `cargo clippy --all-targets --all-features -- -D warnings`
 - `cargo test`
 - `cargo miri test` when `unsafe` is involved

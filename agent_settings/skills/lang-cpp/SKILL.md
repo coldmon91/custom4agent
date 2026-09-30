@@ -13,6 +13,7 @@ Match the standard the project's build already targets; use newer features only 
 ## Rules
 
 - RAII for every resource; no raw `new` / `delete`. `std::unique_ptr` by default, `std::shared_ptr` only for genuinely shared ownership
+- Braces on every `if`
 - Const-correct code; `static_cast` and friends, never C-style casts
 - Constrain templates with concepts (C++20) instead of SFINAE / `enable_if`
 - Resource-owning types get `noexcept` move operations (Rule of Five, or `= default` when members suffice)
