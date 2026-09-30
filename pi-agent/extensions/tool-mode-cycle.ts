@@ -106,9 +106,9 @@ function modeStatus(mode: ToolMode, ctx: ExtensionContext): string {
     case "read":
       return "\x1b[38;5;71m● read\x1b[0m";
     case "write":
-      return "\x1b[38;5;215m● write\x1b[0m";
+      return "\x1b[38;5;117m● write\x1b[0m";
     case "auto":
-      return ctx.ui.theme.fg("success", "● auto");
+      return ctx.ui.theme.fg("warning", "● auto");
   }
 }
 

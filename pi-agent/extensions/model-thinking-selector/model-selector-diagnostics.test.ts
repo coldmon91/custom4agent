@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -27,6 +27,21 @@ test("logs invocation and completion without changing the handler result", async
   assert.deepEqual(entries.map((entry) => entry.event), ["shortcut invoked", "handler completed"]);
   assert.ok(entries.every((entry) => typeof entry.timestamp === "string"));
   assert.equal((await stat(join(dir, LOG_FILE))).mode & 0o777, 0o600);
+});
+
+test("creates a missing log directory without writing to the agent directory", async (t) => {
+  const dir = await createLogDir(t);
+  const agentDir = join(dir, "agent");
+  const logDir = join(dir, "log");
+  await mkdir(agentDir);
+
+  assert.equal(await withSelectorDiagnostics(logDir, async () => "opened"), "opened");
+  assert.deepEqual((await readEntries(logDir)).map((entry) => entry.event), [
+    "shortcut invoked", "handler completed",
+  ]);
+  assert.equal((await stat(logDir)).mode & 0o777, 0o700);
+  assert.equal((await stat(join(logDir, LOG_FILE))).mode & 0o777, 0o600);
+  await assert.rejects(stat(join(agentDir, LOG_FILE)), { code: "ENOENT" });
 });
 
 test("logs the error with a stack and rethrows it", async (t) => {

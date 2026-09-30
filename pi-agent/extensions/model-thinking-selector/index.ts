@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import {
   getAgentDir,
@@ -21,6 +22,7 @@ const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "ma
 const MAX_VISIBLE_MODELS = 10;
 const MAX_RECENT_MODELS = 5;
 const MAX_FAVORITE_MODELS = 5;
+const SELECTOR_LOG_DIR = join(homedir(), ".pi", "log");
 type ThinkingLevel = ModelThinkingLevel;
 
 type FavoriteModelEntry = {
@@ -209,7 +211,7 @@ async function recordRecentModel(provider: string, modelId: string): Promise<voi
       await saveRecentModelStore({ version: 1, items });
     })
     .catch(async (error) => {
-      await writeSelectorDiagnostic(getAgentDir(), "recent model update failed", error);
+      await writeSelectorDiagnostic(SELECTOR_LOG_DIR, "recent model update failed", error);
       console.error("Failed to update recent-models.json:", error);
     });
 
@@ -229,7 +231,7 @@ function enqueueGlobalSettingsWrite(label: string, apply: (settings: SettingsMan
       await settings.flush();
     })
     .catch(async (error) => {
-      await writeSelectorDiagnostic(getAgentDir(), `settings persistence failed: ${label}`, error);
+      await writeSelectorDiagnostic(SELECTOR_LOG_DIR, `settings persistence failed: ${label}`, error);
       console.error(`Failed to persist ${label} to settings.json:`, error);
     });
 
@@ -366,17 +368,17 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
 
   pi.registerShortcut("ctrl+alt+p", {
     description: "Select model and thinking level",
-    handler: (ctx) => withSelectorDiagnostics(getAgentDir(), async () => {
+    handler: (ctx) => withSelectorDiagnostics(SELECTOR_LOG_DIR, async () => {
       const [modelData, loadedFavoriteStore] = await Promise.all([
         getSelectableModelData(ctx),
         loadFavoriteModelStore(),
       ]);
-      await writeSelectorDiagnostic(getAgentDir(), "models loaded");
+      await writeSelectorDiagnostic(SELECTOR_LOG_DIR, "models loaded");
       let favoriteStore = loadedFavoriteStore;
       let models = buildSelectableModels(modelData, favoriteStore);
 
       if (models.length === 0) {
-        await writeSelectorDiagnostic(getAgentDir(), "no configured models available");
+        await writeSelectorDiagnostic(SELECTOR_LOG_DIR, "no configured models available");
         ctx.ui.notify("No configured models available", "warning");
         return;
       }
@@ -387,7 +389,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
         models.findIndex((item) => getModelKey(item.provider, item.modelId) === currentModelKey),
       );
 
-      await writeSelectorDiagnostic(getAgentDir(), "opening picker");
+      await writeSelectorDiagnostic(SELECTOR_LOG_DIR, "opening picker");
       const result = await ctx.ui.custom<{ model: AvailableModelItem; thinking: ThinkingLevel } | null>(
         (tui, theme, _kb, done) => {
           let modelIndex = initialIndex;
@@ -486,7 +488,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
             try {
               await persistFavoriteModelStore(favoriteStore);
             } catch (error) {
-              await writeSelectorDiagnostic(getAgentDir(), "favorite update failed", error);
+              await writeSelectorDiagnostic(SELECTOR_LOG_DIR, "favorite update failed", error);
               favoriteStore = previousStore;
               models = buildSelectableModels(modelData, favoriteStore);
               modelIndex = Math.max(
@@ -703,7 +705,7 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
         },
       );
 
-      await writeSelectorDiagnostic(getAgentDir(), result ? "picker selected model" : "picker cancelled");
+      await writeSelectorDiagnostic(SELECTOR_LOG_DIR, result ? "picker selected model" : "picker cancelled");
       if (!result) return;
 
       const { provider, modelId, model } = result.model;
@@ -711,10 +713,10 @@ export default function modelThinkingSelector(pi: ExtensionAPI) {
       const modelChanged = !ctx.model || ctx.model.provider !== provider || ctx.model.id !== modelId;
 
       if (modelChanged) {
-        await writeSelectorDiagnostic(getAgentDir(), "applying model");
+        await writeSelectorDiagnostic(SELECTOR_LOG_DIR, "applying model");
         const ok = await pi.setModel(model);
         if (!ok) {
-          await writeSelectorDiagnostic(getAgentDir(), `no API key for ${selectedKey}`);
+          await writeSelectorDiagnostic(SELECTOR_LOG_DIR, `no API key for ${selectedKey}`);
           ctx.ui.notify(`No API key for ${selectedKey}`, "error");
           return;
         }

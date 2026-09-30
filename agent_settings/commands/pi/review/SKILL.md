@@ -90,7 +90,8 @@ Take the thinking level from that row's `THINKING` column; a level it does not l
   are never loaded or trusted.
 - Do not pass `-nc` / `--no-context-files`; `AGENTS.md` and `CLAUDE.md` are useful review context.
 - Deliver the prompt only as described in Prompt Transport.
-- Pi may become blocked during work, so periodic checks for blocking are necessary.
+- Run the CLI only as described in Execution Monitoring: detached, polled, never under a
+  fixed timeout.
 - If pi returns an error, report it verbatim.
 
 ## Prompt Construction
@@ -132,26 +133,73 @@ file changes; `[제약]` is what overrides it, so never abbreviate or drop those
 
 The assembled prompt is data. Never place any of it in a shell command, argument, variable,
 heredoc, command substitution, or `printf`/`echo` pipeline.
+The CLI runs detached (see Execution Monitoring), so the prompt always travels as a file
+redirected to stdin.
 
-- **Raw stdin**: when the execution tool can write to the process's stdin, send the complete
-  prompt through it and close stdin.
-- **Prompt file**: otherwise, hand the prompt over as a file redirected to stdin. Claude Code's
-  Bash tool takes this path: it has no stdin input and the process sees `/dev/null`.
-  1. Pick a directory outside the workspace that only the current user can enter: the session
-     scratchpad when one is provided, else a fresh `mktemp -d` directory. Kept outside the
-     workspace, the file never shows up in a `git status` check.
-  2. Write the prompt with the file-writing tool, never a shell command, to a new file named
-     `pi-prompt-<random suffix>.txt`. A suffix fresh per invocation keeps parallel runs apart.
-  3. Append `< '<absolute path>'` to the command. Single quotes stop the shell from expanding `$`
-     or backticks in the path; abort if the path itself contains `'`.
-  4. Once the process has exited, on success, failure, or timeout alike, delete that one file and
-     `rmdir` the `mktemp -d` directory if one was made. Never delete by wildcard, and report a
-     failed deletion.
+1. Create a fresh run directory outside the workspace that only the current user can enter:
+   `mktemp -d '<scratchpad>/pi-run-XXXXXX'` when a session scratchpad is provided, else
+   `mktemp -d`. One directory per invocation keeps parallel runs apart and keeps the files out
+   of `git status`. Abort if the path contains `'`.
+2. Write the prompt with the file-writing tool, never a shell command, to `<run dir>/prompt.txt`.
 - Do not use `@file` or add a message argument. `@file` wraps the text in a `<file>` tag,
   and pi joins stdin, file text, and the first message with no separator. Pi trims stdin
   and exits 0 without running when it is empty, so exit 0 alone does not prove the prompt
   arrived; confirm the output answers the task.
-- If neither transport is available, abort and report the unsupported execution environment.
+- If no file-writing tool is available, abort and report the unsupported execution environment.
+
+## Execution Monitoring
+
+A delegated run can outlast any fixed tool timeout, and a timeout kill is reported as a failure.
+Never run pi in the foreground or under a wall-clock timeout; launch it detached and check
+its state periodically until it ends.
+
+Run directory files: `prompt.txt` (input), `output.txt` (final reply on stdout), `error.log`
+(stderr), `exit-code` (written once the CLI exits). Print mode writes nothing to stdout until the
+run finishes, so an empty `output.txt` during the run is normal.
+
+1. **Launch**: one Bash call from the workspace directory that returns immediately. Substitute
+   literal text for `<model>`, `<level>`, and `<run dir>`; the run directory reaches the script as
+   `$1`, so no path is quoted inside `sh -c`.
+   ```bash
+   nohup sh -c 'pi -p --no-session --no-approve --tool-mode auto \
+       --tools read,grep,find,ls,bash \
+       --model <model> --thinking <level> \
+       < "$1/prompt.txt" > "$1/output.txt" 2> "$1/error.log"
+     rc=$?; echo "$rc" > "$1/exit-code.tmp"; mv "$1/exit-code.tmp" "$1/exit-code"' \
+     sh '<run dir>' > /dev/null 2>&1 &
+   echo "pid=$!"
+   ```
+   `--tool-mode auto` keeps `bash` under the screener. `--tool-mode read` would drop `bash` from
+   the allowlist regardless of what is passed here, which is the configuration that leaves pi
+   unable to read git history.
+   Remember the printed pid as a plain string.
+2. **Poll**: each call waits at most 120 s and returns early once the CLI exits.
+   ```bash
+   d='<run dir>'; p=<pid>; n=0
+   while [ ! -f "$d/exit-code" ] && kill -0 "$p" 2>/dev/null && [ "$n" -lt 120 ]; do
+     sleep 5; n=$((n + 5))
+   done
+   if [ -f "$d/exit-code" ]; then echo "state=exited code=$(cat "$d/exit-code")"
+   elif kill -0 "$p" 2>/dev/null; then echo "state=running"
+   else echo "state=lost"; fi
+   echo "output_bytes=$(wc -c < "$d/output.txt") error_bytes=$(wc -c < "$d/error.log")"
+   tail -n 20 "$d/error.log"
+   ```
+   - Claude Code: run it with `run_in_background: true` (foreground `sleep` is blocked there)
+     and continue on its completion notification.
+   - Other harnesses: run it in the foreground with a tool timeout of at least 180 s.
+   - Repeat while `state=running`. Give the user a one-line progress note every 5 polls.
+3. **Check-in**: print mode emits no progress, so silence alone is not a stall. After 15 polls
+   (about 30 minutes) and every 15 polls after that, tell the user the elapsed time with the
+   `error.log` tail and ask whether to keep waiting or stop. Never stop the run on your own.
+4. **Stop** (only on the user's request): `pkill -TERM -P <pid>`, then poll once. If still
+   `state=running`, run `pkill -KILL -P <pid>; kill -KILL <pid>`. Report that the run was stopped.
+5. **Result**: on `state=exited code=0`, read `output.txt` as the CLI output. On a non-zero code
+   or `state=lost` (launcher killed before recording an exit code), report the `error.log` tail
+   and `output.txt` verbatim as the error.
+6. **Cleanup**: only after `state=exited` or `state=lost`, remove each file by name with
+   `rm -f` (`prompt.txt`, `output.txt`, `error.log`, `exit-code`, `exit-code.tmp`), then
+   `rmdir '<run dir>'`. Never delete by wildcard, and report a failed deletion.
 
 ## What To Do
 
@@ -159,22 +207,15 @@ heredoc, command substitution, or `printf`/`echo` pipeline.
 2. Parse `$ARGUMENTS` for `-m`, `--thinking`, and the user request.
 3. Judge the task's complexity, then fill only unspecified options from the listing.
 4. Announce the resolved choice in one line, including the literal `provider/id` slug and level.
-5. Build the command, substituting the literal resolved slug for `<model>` (no `$VAR` references):
-   ```bash
-   pi -p --no-session --no-approve --tool-mode auto \
-     --tools read,grep,find,ls,bash \
-     --model <model> --thinking <level>
-   ```
-   `--tool-mode auto` keeps `bash` under the screener. `--tool-mode read` would drop `bash` from
-   the allowlist regardless of what is passed here, which is the configuration that leaves pi
-   unable to read git history.
-6. Deliver the prompt as described in Prompt Transport: through raw stdin, closed afterward, or
-   as `< '<prompt file>'` appended to the command once the file is written.
-7. Execute with Bash and set timeout to 300000 ms. In a git repository, record
-   When a prompt file was used, delete it once the process has exited, including after a timeout.
-   `git status --porcelain` immediately before the run so step 9 has something to compare against.
-8. Validate pi output against the real code.
-9. Re-run `git status --porcelain` and diff it against the step 7 snapshot. The gate's fast path
+5. In a git repository, record `git status --porcelain` immediately before the run so
+   step 9 has something to compare against.
+6. Create the run directory and write `prompt.txt` as described in Prompt Transport.
+7. Launch the CLI detached as in Execution Monitoring step 1, substituting the literal resolved
+   slug and thinking level (no `$VAR` references).
+8. Poll until `state=exited` or `state=lost`, applying the check-in; then read the result and
+   clean up the run directory as in Execution Monitoring steps 2 ~ 6.
+9. Re-run `git status --porcelain` and diff it against the step 5 snapshot. The gate's fast path
    does not stop an in-repo write, so any new entry means pi changed the working tree during a
    review: report it to the user with the paths, and do not silently revert it.
-10. Deliver pi output, validation, the working-tree check, and brief commentary.
+10. Validate pi output against the real code.
+11. Deliver pi output, validation, the working-tree check, and brief commentary.

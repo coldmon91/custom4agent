@@ -75,7 +75,8 @@ listed level below it.
 - Do not pass `--add-dir` unless the user explicitly requests another writable directory.
 - Codex must not run destructive commands such as `rm`, `git reset`, or checkout-based reverts.
 - Deliver the prompt only as described in Prompt Transport.
-- Codex may become blocked during work, so periodic checks for blocking are necessary.
+- Run Codex only as described in Execution Monitoring: detached, polled, never under a
+  fixed timeout.
 - If Codex returns an error, report it verbatim.
 
 ## Prompt Construction
@@ -115,24 +116,66 @@ Always include `[제약]`.
 
 The assembled prompt is data. Never place any of it in a shell command, argument, variable,
 heredoc, command substitution, or `printf`/`echo` pipeline.
+Codex runs detached (see Execution Monitoring), so the prompt always travels as a file
+redirected to stdin.
 
-- **Raw stdin**: when the execution tool can write to the process's stdin, send the complete
-  prompt through it and close stdin.
-- **Prompt file**: otherwise, hand the prompt over as a file redirected to stdin. Claude Code's
-  Bash tool takes this path: it has no stdin input and the process sees `/dev/null`.
-  1. Pick a directory outside the workspace that only the current user can enter: the session
-     scratchpad when one is provided, else a fresh `mktemp -d` directory. Kept outside the
-     workspace, the file never shows up in a `git status` check.
-  2. Write the prompt with the file-writing tool, never a shell command, to a new file named
-     `codex-prompt-<random suffix>.txt`. A suffix fresh per invocation keeps parallel runs apart.
-  3. Append `< '<absolute path>'` to the command. Single quotes stop the shell from expanding `$`
-     or backticks in the path; abort if the path itself contains `'`.
-  4. Once the process has exited, on success, failure, or timeout alike, delete that one file and
-     `rmdir` the `mktemp -d` directory if one was made. Never delete by wildcard, and report a
-     failed deletion.
+1. Create a fresh run directory outside the workspace that only the current user can enter:
+   `mktemp -d '<scratchpad>/codex-run-XXXXXX'` when a session scratchpad is provided, else
+   `mktemp -d`. One directory per invocation keeps parallel runs apart and keeps the files out
+   of `git status`. Abort if the path contains `'`.
+2. Write the prompt with the file-writing tool, never a shell command, to `<run dir>/prompt.txt`.
 - Keep the trailing `-`. With it Codex reads stdin as the whole prompt; a positional prompt
   would demote stdin to an appended `<stdin>` block.
-- If neither transport is available, abort and report the unsupported execution environment.
+- If no file-writing tool is available, abort and report the unsupported execution environment.
+
+## Execution Monitoring
+
+A Codex run can outlast any fixed tool timeout, and a timeout kill is reported as a failure.
+Never run Codex in the foreground or under a wall-clock timeout; launch it detached and check
+its state periodically until it ends.
+
+Run directory files: `prompt.txt` (input), `codex.log` (stdout and stderr progress),
+`last-message.txt` (final reply via `-o`), `exit-code` (written once Codex exits).
+
+1. **Launch**: one Bash call that returns immediately. Substitute literal text for `<model>`,
+   `<level>`, and `<run dir>`; the run directory reaches the script as `$1`, so no path is
+   quoted inside `sh -c`.
+   ```bash
+   nohup sh -c 'codex -a never e --skip-git-repo-check -s workspace-write \
+       -m <model> -c model_reasoning_effort=<level> \
+       -o "$1/last-message.txt" - < "$1/prompt.txt" > "$1/codex.log" 2>&1
+     rc=$?; echo "$rc" > "$1/exit-code.tmp"; mv "$1/exit-code.tmp" "$1/exit-code"' \
+     sh '<run dir>' > /dev/null 2>&1 &
+   echo "pid=$!"
+   ```
+   Remember the printed pid as a plain string.
+2. **Poll**: each call waits at most 120 s and returns early once Codex exits.
+   ```bash
+   d='<run dir>'; p=<pid>; n=0
+   while [ ! -f "$d/exit-code" ] && kill -0 "$p" 2>/dev/null && [ "$n" -lt 120 ]; do
+     sleep 5; n=$((n + 5))
+   done
+   if [ -f "$d/exit-code" ]; then echo "state=exited code=$(cat "$d/exit-code")"
+   elif kill -0 "$p" 2>/dev/null; then echo "state=running"
+   else echo "state=lost"; fi
+   echo "log_bytes=$(wc -c < "$d/codex.log")"
+   tail -n 20 "$d/codex.log"
+   ```
+   - Claude Code: run it with `run_in_background: true` (foreground `sleep` is blocked there)
+     and continue on its completion notification.
+   - Other harnesses: run it in the foreground with a tool timeout of at least 180 s.
+   - Repeat while `state=running`. Give the user a one-line progress note every 5 polls.
+3. **Stall check**: compare `log_bytes` with the previous poll. When it has not grown for 5
+   consecutive polls (about 10 minutes), show the log tail and ask the user whether to keep
+   waiting or stop. Never stop Codex on your own; long reasoning can be silent for minutes.
+4. **Stop** (only on the user's request): `pkill -TERM -P <pid>`, then poll once. If still
+   `state=running`, run `pkill -KILL -P <pid>; kill -KILL <pid>`. Report that the run was stopped.
+5. **Result**: on `state=exited code=0`, read `last-message.txt` as Codex's output. On a
+   non-zero code or `state=lost` (launcher killed before recording an exit code), report the log
+   tail verbatim as the error.
+6. **Cleanup**: only after `state=exited` or `state=lost`, remove each file by name with
+   `rm -f` (`prompt.txt`, `codex.log`, `last-message.txt`, `exit-code`, `exit-code.tmp`), then
+   `rmdir '<run dir>'`. Never delete by wildcard, and report a failed deletion.
 
 ## What To Do
 
@@ -140,16 +183,11 @@ heredoc, command substitution, or `printf`/`echo` pipeline.
 2. Parse `$ARGUMENTS` for `-m`, `-c model_reasoning_effort=`, and the user request.
 3. Judge the task's complexity, then fill only unspecified options from the listing.
 4. Announce the resolved choice in one line, including the literal model slug.
-5. Build the command, substituting the literal resolved slug for `<model>` (no `$VAR` references).
-   Use `-` so that Codex reads the entire assembled prompt from stdin:
-   ```bash
-   codex -a never e --skip-git-repo-check -s workspace-write \
-     -m <model> -c model_reasoning_effort=<level> -
-   ```
-6. Deliver the prompt as described in Prompt Transport: through raw stdin, closed afterward, or
-   as `< '<prompt file>'` appended to the command once the file is written.
-7. Execute with Bash and set timeout to 600000 ms.
-   When a prompt file was used, delete it once the process has exited, including after a timeout.
+5. Create the run directory and write `prompt.txt` as described in Prompt Transport.
+6. Launch Codex detached as in Execution Monitoring step 1, substituting the literal resolved
+   slug and effort (no `$VAR` references).
+7. Poll until `state=exited` or `state=lost`, applying the stall check; then read the result
+   and clean up the run directory as in Execution Monitoring steps 2 ~ 6.
 8. Inspect the resulting diff yourself.
 9. Run or review relevant verification when feasible.
 10. Deliver Codex output, your validation, changed files, and remaining risks.

@@ -32,3 +32,8 @@ pi-agent/packages/*/node_modules/
 pi-agent/packages/*/*.tgz
 pi-agent/extensions/*/node_modules/
 pi-agent/tmp/
+.tmp/
+
+# Machine-local Pi extensions
+pi-agent/extensions/orca-*
+pi-agent/extensions/herdr-*

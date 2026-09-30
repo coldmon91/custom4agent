@@ -1,9 +1,9 @@
-import { appendFile } from "node:fs/promises";
+import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
 const LOG_FILE = "model-thinking-selector.log";
 
-export async function writeSelectorDiagnostic(agentDir: string, event: string, error?: unknown): Promise<void> {
+export async function writeSelectorDiagnostic(logDir: string, event: string, error?: unknown): Promise<void> {
   const entry = {
     timestamp: new Date().toISOString(),
     event,
@@ -17,20 +17,21 @@ export async function writeSelectorDiagnostic(agentDir: string, event: string, e
   };
 
   try {
-    await appendFile(join(agentDir, LOG_FILE), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
+    await mkdir(logDir, { recursive: true, mode: 0o700 });
+    await appendFile(join(logDir, LOG_FILE), `${JSON.stringify(entry)}\n`, { mode: 0o600 });
   } catch (writeError) {
     console.error(`Failed to write ${LOG_FILE}:`, writeError);
   }
 }
 
-export async function withSelectorDiagnostics<T>(agentDir: string, run: () => Promise<T>): Promise<T> {
-  await writeSelectorDiagnostic(agentDir, "shortcut invoked");
+export async function withSelectorDiagnostics<T>(logDir: string, run: () => Promise<T>): Promise<T> {
+  await writeSelectorDiagnostic(logDir, "shortcut invoked");
   try {
     const result = await run();
-    await writeSelectorDiagnostic(agentDir, "handler completed");
+    await writeSelectorDiagnostic(logDir, "handler completed");
     return result;
   } catch (error) {
-    await writeSelectorDiagnostic(agentDir, "handler failed", error);
+    await writeSelectorDiagnostic(logDir, "handler failed", error);
     throw error;
   }
 }

@@ -85,7 +85,8 @@ target level is absent, use the highest listed level below it.
 - Run with the working directory set to the workspace; `--restricted` confines file reads to it.
   Pass `--add-dir` only when the user explicitly asks for another readable directory.
 - Deliver the prompt only as described in Prompt Transport.
-- The delegated run may become blocked during work, so periodic checks for blocking are necessary.
+- Run the CLI only as described in Execution Monitoring: detached, polled, never under a
+  fixed timeout.
 - If the CLI returns an error, report it verbatim.
 
 ## Prompt Construction
@@ -122,24 +123,68 @@ Always include `[제약]`.
 
 The assembled prompt is data. Never place any of it in a shell command, argument, variable,
 heredoc, command substitution, or `printf`/`echo` pipeline.
+The CLI runs detached (see Execution Monitoring), so the prompt always travels as a file
+redirected to stdin.
 
-- **Raw stdin**: when the execution tool can write to the process's stdin, send the complete
-  prompt through it and close stdin.
-- **Prompt file**: otherwise, hand the prompt over as a file redirected to stdin. Claude Code's
-  Bash tool takes this path: it has no stdin input and the process sees `/dev/null`.
-  1. Pick a directory outside the workspace that only the current user can enter: the session
-     scratchpad when one is provided, else a fresh `mktemp -d` directory. Kept outside the
-     workspace, the file never shows up in a `git status` check.
-  2. Write the prompt with the file-writing tool, never a shell command, to a new file named
-     `claude-prompt-<random suffix>.txt`. A suffix fresh per invocation keeps parallel runs apart.
-  3. Append `< '<absolute path>'` to the command. Single quotes stop the shell from expanding `$`
-     or backticks in the path; abort if the path itself contains `'`.
-  4. Once the process has exited, on success, failure, or timeout alike, delete that one file and
-     `rmdir` the `mktemp -d` directory if one was made. Never delete by wildcard, and report a
-     failed deletion.
+1. Create a fresh run directory outside the workspace that only the current user can enter:
+   `mktemp -d '<scratchpad>/claude-run-XXXXXX'` when a session scratchpad is provided, else
+   `mktemp -d`. One directory per invocation keeps parallel runs apart and keeps the files out
+   of `git status`. Abort if the path contains `'`.
+2. Write the prompt with the file-writing tool, never a shell command, to `<run dir>/prompt.txt`.
 - Do not add a prompt argument. `claude -p` reads the whole prompt from stdin only when no
   prompt argument is given.
-- If neither transport is available, abort and report the unsupported execution environment.
+- If no file-writing tool is available, abort and report the unsupported execution environment.
+
+## Execution Monitoring
+
+A delegated run can outlast any fixed tool timeout, and a timeout kill is reported as a failure.
+Never run the delegated run in the foreground or under a wall-clock timeout; launch it detached and check
+its state periodically until it ends.
+
+Run directory files: `prompt.txt` (input), `output.txt` (final reply on stdout), `error.log`
+(stderr), `exit-code` (written once the CLI exits). Print mode writes nothing to stdout until the
+run finishes, so an empty `output.txt` during the run is normal.
+
+1. **Launch**: one Bash call from the workspace directory that returns immediately. Substitute
+   literal text for `<model>`, `<level>`, and `<run dir>`; the run directory reaches the script as
+   `$1`, so no path is quoted inside `sh -c`.
+   ```bash
+   nohup sh -c 'claude -p --restricted --no-session-persistence --strict-mcp-config \
+       --tools "Read,Grep,Glob" --allowedTools "Read Grep Glob" \
+       --model <model> --effort <level> \
+       < "$1/prompt.txt" > "$1/output.txt" 2> "$1/error.log"
+     rc=$?; echo "$rc" > "$1/exit-code.tmp"; mv "$1/exit-code.tmp" "$1/exit-code"' \
+     sh '<run dir>' > /dev/null 2>&1 &
+   echo "pid=$!"
+   ```
+   Remember the printed pid as a plain string.
+2. **Poll**: each call waits at most 120 s and returns early once the CLI exits.
+   ```bash
+   d='<run dir>'; p=<pid>; n=0
+   while [ ! -f "$d/exit-code" ] && kill -0 "$p" 2>/dev/null && [ "$n" -lt 120 ]; do
+     sleep 5; n=$((n + 5))
+   done
+   if [ -f "$d/exit-code" ]; then echo "state=exited code=$(cat "$d/exit-code")"
+   elif kill -0 "$p" 2>/dev/null; then echo "state=running"
+   else echo "state=lost"; fi
+   echo "output_bytes=$(wc -c < "$d/output.txt") error_bytes=$(wc -c < "$d/error.log")"
+   tail -n 20 "$d/error.log"
+   ```
+   - Claude Code: run it with `run_in_background: true` (foreground `sleep` is blocked there)
+     and continue on its completion notification.
+   - Other harnesses: run it in the foreground with a tool timeout of at least 180 s.
+   - Repeat while `state=running`. Give the user a one-line progress note every 5 polls.
+3. **Check-in**: print mode emits no progress, so silence alone is not a stall. After 15 polls
+   (about 30 minutes) and every 15 polls after that, tell the user the elapsed time with the
+   `error.log` tail and ask whether to keep waiting or stop. Never stop the run on your own.
+4. **Stop** (only on the user's request): `pkill -TERM -P <pid>`, then poll once. If still
+   `state=running`, run `pkill -KILL -P <pid>; kill -KILL <pid>`. Report that the run was stopped.
+5. **Result**: on `state=exited code=0`, read `output.txt` as the CLI output. On a non-zero code
+   or `state=lost` (launcher killed before recording an exit code), report the `error.log` tail
+   and `output.txt` verbatim as the error.
+6. **Cleanup**: only after `state=exited` or `state=lost`, remove each file by name with
+   `rm -f` (`prompt.txt`, `output.txt`, `error.log`, `exit-code`, `exit-code.tmp`), then
+   `rmdir '<run dir>'`. Never delete by wildcard, and report a failed deletion.
 
 ## What To Do
 
@@ -147,15 +192,10 @@ heredoc, command substitution, or `printf`/`echo` pipeline.
 2. Parse `$ARGUMENTS` for `-m`, `--effort`, and the user request.
 3. Judge the task's complexity, then fill only unspecified options from the listing.
 4. Announce the resolved choice in one line, including the literal model alias and effort level.
-5. Build the command, substituting the literal resolved alias for `<model>` (no `$VAR` references):
-   ```bash
-   claude -p --restricted --no-session-persistence --strict-mcp-config \
-     --tools "Read,Grep,Glob" --allowedTools "Read Grep Glob" \
-     --model <model> --effort <level>
-   ```
-6. Deliver the prompt as described in Prompt Transport: through raw stdin, closed afterward, or
-   as `< '<prompt file>'` appended to the command once the file is written.
-7. Execute with Bash and set timeout to 300000 ms.
-   When a prompt file was used, delete it once the process has exited, including after a timeout.
+5. Create the run directory and write `prompt.txt` as described in Prompt Transport.
+6. Launch the CLI detached as in Execution Monitoring step 1, substituting the literal resolved
+   alias and effort (no `$VAR` references).
+7. Poll until `state=exited` or `state=lost`, applying the check-in; then read the result and
+   clean up the run directory as in Execution Monitoring steps 2 ~ 6.
 8. Validate the output against the real code.
 9. Deliver the CLI output, validation, and brief commentary.
