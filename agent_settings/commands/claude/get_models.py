@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Resolve Claude Code tiers to (model alias, effort level) from `claude --help`.
+"""List the Claude Code models currently selectable, with effort levels, from `claude --help`.
 
 Unlike `codex debug models` or `pi --list-models`, the `claude` CLI exposes no
 model enumeration command. What it does expose is stable: `--model` accepts
 aliases that always point at the newest model of a family, and `--help`
-documents both the alias examples and the effort ladder. This script reads those
-two signals instead of hardcoding dated slugs, and falls back to the documented
-alias ladder with a warning when the help text stops carrying them.
+documents both the alias examples and the effort ladder. The account's extra
+model options (e.g. a `[1m]` variant) come from the CLI's own cache. This script
+joins those signals instead of hardcoding dated slugs, and falls back to the
+documented ladders with a warning when the help text stops carrying them.
 """
 
 from __future__ import annotations
@@ -26,34 +27,6 @@ DEFAULT_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 # Ordered strongest to weakest. Family aliases outlive individual model names,
 # which is exactly why `--model` accepts them.
 ALIAS_LADDER = ("fable", "opus", "sonnet", "haiku")
-
-# Ordered strongest to weakest. Role names stay stable even when model names do not.
-ROLES = ("deep", "balanced", "fast")
-
-# When a role has no alias of its own, borrow from the nearest neighbour so every
-# tier stays answerable on a thin lineup.
-ROLE_BORROW_ORDER = {
-    "deep": ("balanced", "fast"),
-    "balanced": ("deep", "fast"),
-    "fast": ("balanced", "deep"),
-}
-
-# Tier -> (role, requested effort). The effort is a ceiling, clamped down to the
-# strongest level the CLI actually advertises.
-TIER_POLICY = {
-    "agent": (
-        ("fast", "medium"),
-        ("balanced", "high"),
-        ("deep", "high"),
-        ("deep", "xhigh"),
-    ),
-    "review": (
-        ("fast", "medium"),
-        ("balanced", "medium"),
-        ("deep", "high"),
-        ("deep", "xhigh"),
-    ),
-}
 
 EFFORT_LINE = re.compile(r"--effort\s+<level>.*?\(([^)]*)\)", re.DOTALL)
 MODEL_LINE = re.compile(r"--model\s+<model>(.*?)(?=\n\s{2}-{1,2}\w)", re.DOTALL)
@@ -94,32 +67,47 @@ def load_help(source: str | None, timeout: float) -> str:
         die(f"cannot read {source}: {exc}")
 
 
-def parse_efforts(help_text: str) -> tuple[list[str], list[str]]:
+def parse_efforts(help_text: str) -> list[str]:
     """Read the `--effort` ladder out of the help text, ordered weakest first."""
     match = EFFORT_LINE.search(help_text)
     if not match:
-        return list(DEFAULT_EFFORTS), [
+        warn(
             "`--help` no longer documents the `--effort` ladder; using the built-in ladder "
             + ",".join(DEFAULT_EFFORTS)
-        ]
+        )
+        return list(DEFAULT_EFFORTS)
 
     found = {token.strip() for token in match.group(1).split(",") if token.strip()}
     ordered = [effort for effort in DEFAULT_EFFORTS if effort in found]
     unknown = sorted(found - set(DEFAULT_EFFORTS))
-
-    notes = []
     if unknown:
         # Appended at the top: an unrecognised level can only be stronger than the
-        # ladder this script knows, and clamping never selects it unless requested.
+        # ladder this script knows.
         ordered += unknown
-        notes.append(f"`--help` advertises unknown effort level(s): {', '.join(unknown)}")
+        warn(f"`--help` advertises unknown effort level(s): {', '.join(unknown)}")
     if not ordered:
-        return list(DEFAULT_EFFORTS), notes + ["parsed no usable effort level; using the built-in ladder"]
-    return ordered, notes
+        warn("parsed no usable effort level; using the built-in ladder")
+        return list(DEFAULT_EFFORTS)
+    return ordered
 
 
-def extra_aliases() -> set[str]:
-    """Family names from the account's extra model options, e.g. a `[1m]` variant.
+def parse_aliases(help_text: str) -> list[str]:
+    """Collect the model names `--help` quotes: known aliases strongest first, then any
+    other quoted name in help order."""
+    section = MODEL_LINE.search(help_text)
+    quoted = list(dict.fromkeys(QUOTED.findall(section.group(1)))) if section else []
+    known = [alias for alias in ALIAS_LADDER if alias in quoted]
+    if not known:
+        warn(
+            "`--help` names no known model alias; using the built-in ladder "
+            + ",".join(ALIAS_LADDER)
+        )
+        known = list(ALIAS_LADDER)
+    return known + [name for name in quoted if name not in ALIAS_LADDER]
+
+
+def extra_options() -> list[dict]:
+    """The account's extra model options, e.g. a `[1m]` variant.
 
     This cache is written by the CLI itself, so it reflects entitlements the help
     text never mentions. Absent or unreadable, it simply contributes nothing.
@@ -128,123 +116,84 @@ def extra_aliases() -> set[str]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return set()
+        return []
 
     options = data.get("additionalModelOptionsCache")
     if not isinstance(options, list):
-        return set()
-
-    found = set()
-    for option in options:
-        value = option.get("value") if isinstance(option, dict) else None
-        if isinstance(value, str):
-            found.update(alias for alias in ALIAS_LADDER if alias in value.lower())
-    return found
+        return []
+    return [
+        option
+        for option in options
+        if isinstance(option, dict) and isinstance(option.get("value"), str) and option["value"]
+    ]
 
 
-def parse_aliases(help_text: str) -> tuple[list[str], list[str]]:
-    """Collect the model aliases the CLI names, strongest first."""
-    section = MODEL_LINE.search(help_text)
-    quoted = {token for token in QUOTED.findall(section.group(1))} if section else set()
-    named = {alias for alias in ALIAS_LADDER if alias in quoted}
-
-    notes = []
-    if not named:
-        # The account cache alone would leave a one-alias pool and collapse every
-        # tier onto it, so widen to the documented ladder instead.
-        notes.append(
-            "`--help` names no known model alias; widened to the built-in ladder "
-            + ",".join(ALIAS_LADDER)
-        )
-        named = set(ALIAS_LADDER)
-
-    discovered = named | extra_aliases()
-    return [alias for alias in ALIAS_LADDER if alias in discovered], notes
+def family_of(name: str) -> str | None:
+    lowered = name.lower()
+    return next((alias for alias in ALIAS_LADDER if alias in lowered), None)
 
 
-def assign_roles(aliases: list[str]) -> tuple[dict[str, str], list[str]]:
-    """Bind the strongest, median, and weakest alias to the three roles."""
-    if not aliases:
-        die("no model alias could be resolved")
-
-    assigned = {
-        "deep": aliases[0],
-        "balanced": aliases[(len(aliases) - 1) // 2],
-        "fast": aliases[-1],
-    }
-
-    notes = []
-    for role in ROLES:
-        if role in assigned:
-            continue
-        source = next((other for other in ROLE_BORROW_ORDER[role] if other in assigned), None)
-        if source is not None:
-            assigned[role] = assigned[source]
-
-    if len(aliases) < len(ROLES):
-        collapsed = ", ".join(f"{role}={assigned[role]}" for role in ROLES)
-        notes.append(f"only {len(aliases)} alias(es) to bind; roles overlap ({collapsed})")
-    return assigned, notes
-
-
-def clamp_effort(requested: str, supported: list[str]) -> str | None:
-    """Clamp down to the strongest supported level at or below `requested`."""
-    if requested not in supported:
-        # The ladder shrank; fall back to the strongest level below the request.
-        ceiling = DEFAULT_EFFORTS.index(requested) if requested in DEFAULT_EFFORTS else len(DEFAULT_EFFORTS)
-        below = [e for e in supported if e in DEFAULT_EFFORTS and DEFAULT_EFFORTS.index(e) <= ceiling]
-        return below[-1] if below else None
-    return requested
-
-
-def resolve_tiers(assigned: dict[str, str], policy: tuple, supported: list[str]) -> list[dict]:
-    tiers = []
-    for number, (role, requested) in enumerate(policy, start=1):
-        alias = assigned.get(role)
-        if alias is None:
-            die(f"tier{number}: no alias could be bound to the `{role}` role")
-
-        effort = clamp_effort(requested, supported)
-        if effort is None:
-            die(f"tier{number}: no advertised effort level at or below `{requested}`")
-
-        tiers.append({
-            "tier": number,
-            "role": role,
+def build_rows(aliases: list[str], options: list[dict], efforts: list[str]) -> list[dict]:
+    """Aliases first within each family, then that family's extra options; families
+    strongest first, unrecognised names last."""
+    rows = []
+    for alias in aliases:
+        family = family_of(alias)
+        rows.append({
             "model": alias,
-            "effort": effort,
-            "supported_efforts": supported,
+            "family": family,
+            "efforts": efforts,
+            "description": f"Alias for the latest {alias.capitalize()} model"
+            if alias in ALIAS_LADDER
+            else "Named in `claude --help`",
         })
-    return tiers
+
+    listed = {row["model"] for row in rows}
+    for option in options:
+        value = option["value"]
+        if value in listed:
+            continue
+        listed.add(value)
+        rows.append({
+            "model": value,
+            "family": family_of(value),
+            "efforts": efforts,
+            "description": " ".join(
+                str(option.get("description") or option.get("label") or "").split()
+            ),
+        })
+
+    def rank(row: dict) -> int:
+        family = row["family"]
+        return ALIAS_LADDER.index(family) if family else len(ALIAS_LADDER)
+
+    # Stable sort keeps each alias ahead of the extra options of its family.
+    rows.sort(key=rank)
+    return [{key: value for key, value in row.items() if key != "family"} for row in rows]
 
 
-def format_tiers(tiers: list[dict]) -> str:
+def format_table(rows: list[dict]) -> str:
+    """Fixed-width columns; DESCRIPTION stays last because it contains spaces."""
+    header = ("MODEL", "EFFORTS", "DESCRIPTION")
+    cells = [header] + [
+        (row["model"], ",".join(row["efforts"]) or "-", row["description"] or "-")
+        for row in rows
+    ]
+    widths = [max(len(line[i]) for line in cells) for i in range(len(header))]
     return "\n".join(
-        line
-        for tier in tiers
-        for line in (
-            f"tier{tier['tier']}_model={tier['model']}",
-            f"tier{tier['tier']}_effort={tier['effort']}",
-            f"tier{tier['tier']}_supported_efforts={','.join(tier['supported_efforts'])}",
-        )
+        "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(line)).rstrip()
+        for line in cells
     )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Resolve Claude Code tier models and effort levels.",
-    )
-    parser.add_argument(
-        "--profile",
-        choices=sorted(TIER_POLICY),
-        default="agent",
-        help="tier policy to apply (default: agent)",
-    )
-    parser.add_argument("--json", action="store_true", help="emit the tier table as JSON")
-    parser.add_argument(
-        "--all",
+    parser = argparse.ArgumentParser(description="List the Claude Code models currently selectable.")
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--json", action="store_true", help="emit the model list as JSON")
+    output.add_argument(
+        "--slugs",
         action="store_true",
-        help="list resolved model aliases instead of the tier table",
+        help="print bare model names, one per line",
     )
     parser.add_argument(
         "--from-file",
@@ -261,20 +210,14 @@ def main() -> None:
     args = parser.parse_args()
 
     help_text = load_help(args.from_file, args.timeout)
-    aliases, alias_notes = parse_aliases(help_text)
+    rows = build_rows(parse_aliases(help_text), extra_options(), parse_efforts(help_text))
 
-    if args.all:
-        for alias in aliases:
-            print(alias)
-        return
-
-    efforts, effort_notes = parse_efforts(help_text)
-    assigned, role_notes = assign_roles(aliases)
-    for note in alias_notes + effort_notes + role_notes:
-        warn(note)
-
-    tiers = resolve_tiers(assigned, TIER_POLICY[args.profile], efforts)
-    print(json.dumps(tiers, indent=2) if args.json else format_tiers(tiers))
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    elif args.slugs:
+        print("\n".join(row["model"] for row in rows))
+    else:
+        print(format_table(rows))
 
 
 if __name__ == "__main__":

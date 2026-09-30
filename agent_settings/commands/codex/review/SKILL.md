@@ -73,10 +73,7 @@ listed level below it.
 - Always include `--skip-git-repo-check`.
 - Do not use `--dangerously-bypass-approvals-and-sandbox`.
 - Do not allow Codex to modify, create, or delete files.
-- Never interpolate the assembled prompt into a shell command, argument, variable, heredoc, or
-  `printf`/`echo` pipeline. Pass it only through the execution tool's raw stdin channel.
-- If the execution tool cannot pass raw stdin without shell interpolation, abort and report the
-  unsupported execution environment.
+- Deliver the prompt only as described in Prompt Transport.
 - Codex may become blocked during work, so periodic checks for blocking are necessary.
 - If Codex returns an error, report it verbatim.
 
@@ -110,6 +107,29 @@ Do not pass the user's raw prompt directly. Assemble this prompt.
 
 Always include `[제약]`.
 
+## Prompt Transport
+
+The assembled prompt is data. Never place any of it in a shell command, argument, variable,
+heredoc, command substitution, or `printf`/`echo` pipeline.
+
+- **Raw stdin**: when the execution tool can write to the process's stdin, send the complete
+  prompt through it and close stdin.
+- **Prompt file**: otherwise, hand the prompt over as a file redirected to stdin. Claude Code's
+  Bash tool takes this path: it has no stdin input and the process sees `/dev/null`.
+  1. Pick a directory outside the workspace that only the current user can enter: the session
+     scratchpad when one is provided, else a fresh `mktemp -d` directory. Kept outside the
+     workspace, the file never shows up in a `git status` check.
+  2. Write the prompt with the file-writing tool, never a shell command, to a new file named
+     `codex-prompt-<random suffix>.txt`. A suffix fresh per invocation keeps parallel runs apart.
+  3. Append `< '<absolute path>'` to the command. Single quotes stop the shell from expanding `$`
+     or backticks in the path; abort if the path itself contains `'`.
+  4. Once the process has exited, on success, failure, or timeout alike, delete that one file and
+     `rmdir` the `mktemp -d` directory if one was made. Never delete by wildcard, and report a
+     failed deletion.
+- Keep the trailing `-`. With it Codex reads stdin as the whole prompt; a positional prompt
+  would demote stdin to an appended `<stdin>` block.
+- If neither transport is available, abort and report the unsupported execution environment.
+
 ## What To Do
 
 1. List the usable models with the `get_models.py` command above and remember the rows as plain strings.
@@ -122,9 +142,9 @@ Always include `[제약]`.
    codex -a never e --skip-git-repo-check -s read-only \
      -m <model> -c model_reasoning_effort=<level> -
    ```
-6. Start the command and send the complete assembled prompt through the execution tool's raw stdin
-   input facility, then close stdin. Do not construct a shell pipeline or place any prompt text in
-   the command string.
+6. Deliver the prompt as described in Prompt Transport: through raw stdin, closed afterward, or
+   as `< '<prompt file>'` appended to the command once the file is written.
 7. Execute with Bash and set timeout to 300000 ms.
+   When a prompt file was used, delete it once the process has exited, including after a timeout.
 8. Validate Codex output against the real code.
 9. Deliver Codex output, validation, and brief commentary.

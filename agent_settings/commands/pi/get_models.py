@@ -19,6 +19,10 @@ THINKING_LEVELS = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
 SIZE_PATTERN = re.compile(r"^([\d.]+)([KM]?)$", re.IGNORECASE)
 SIZE_UNITS = {"": 1, "K": 1_000, "M": 1_000_000}
 
+# A dotted number inside a model id. A number suffixed with `b` is a parameter count
+# (`gpt-oss-120b`, `Llama-3.3-70B`), never a version.
+VERSION_TOKEN = re.compile(r"(?<![\d.])\d+(?:\.\d+)*(?![\d.]|[bB](?![a-zA-Z]))")
+
 
 def die(message: str) -> NoReturn:
     sys.exit(f"error: {message}")
@@ -129,6 +133,35 @@ def strength(model: dict) -> tuple[float, float, float, int]:
     supported = supported_thinking(model)
     ceiling = THINKING_LEVELS.index(supported[-1]) if supported else -1
     return (output_cost(model), input_cost(model), float(model.get("contextWindow") or 0), ceiling)
+
+
+def version_of(model: dict) -> tuple[int, ...]:
+    """First version token of the model name as a numeric tuple, so `5.10` outranks `5.6`."""
+    match = VERSION_TOKEN.search(model["slug"].rpartition("/")[2])
+    return tuple(int(part) for part in match.group().split(".")) if match else ()
+
+
+def line_of(model: dict) -> tuple[str, str]:
+    """(namespace, name with its version masked), so `gpt-6-sol` and `gpt-5.6-sol` share a
+    line. An aggregator's model namespace counts as the provider (`together/zai-org`),
+    since versions of different vendors are not comparable."""
+    namespace, _, name = model["slug"].rpartition("/")
+    return (namespace.casefold(), VERSION_TOKEN.sub("*", name, count=1).casefold())
+
+
+def listing_order(catalog: list[dict]) -> list[dict]:
+    """Providers by name; within one, lines by their newest version descending (name breaks
+    ties); within a line, newest version first. Chained stable sorts, last key applied last."""
+    newest: dict[tuple[str, str], tuple[int, ...]] = {}
+    for model in catalog:
+        line = line_of(model)
+        newest[line] = max(newest.get(line, ()), version_of(model))
+
+    ranked = sorted(catalog, key=version_of, reverse=True)
+    ranked.sort(key=lambda model: line_of(model)[1])
+    ranked.sort(key=lambda model: newest[line_of(model)], reverse=True)
+    ranked.sort(key=lambda model: line_of(model)[0])
+    return ranked
 
 
 def build_catalog(available: list[dict], store: dict | None) -> list[dict]:
@@ -249,6 +282,13 @@ def main() -> None:
         help="print bare `provider/model` slugs, one per line",
     )
     parser.add_argument(
+        "--sort",
+        choices=("name", "strength"),
+        default="name",
+        help="row order: provider, then model lines and versions newest first; "
+        "or most capable first by pricing (default: name)",
+    )
+    parser.add_argument(
         "--from-file",
         metavar="PATH",
         help="read `pi --list-models` output from PATH instead of running pi",
@@ -277,7 +317,11 @@ def main() -> None:
         die("no model survived the availability join; run `pi update` and check `pi auth check`")
 
     favorites = favorite_keys(config)
-    rows = [describe(model, favorites) for model in sorted(catalog, key=strength, reverse=True)]
+    if args.sort == "name":
+        ranked = listing_order(catalog)
+    else:
+        ranked = sorted(catalog, key=strength, reverse=True)
+    rows = [describe(model, favorites) for model in ranked]
     if args.favorites:
         rows = [row for row in rows if row["favorite"]]
         if not rows:

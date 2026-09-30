@@ -14,7 +14,7 @@ Run `get_models.py` (in this skill's parent directory) once per invocation. Reso
 against this `SKILL.md`'s absolute location and run it with the absolute path:
 
 ```bash
-python3 "<skill dir>/../get_models.py"
+python3 "<skill dir>/../get_models.py" --sort strength
 ```
 
 It prints one row per model pi can currently reach, most capable first:
@@ -34,7 +34,8 @@ Rows are ordered by provider pricing, the only capability proxy available here, 
 follows the account's real lineup rather than any hardcoded slug. Only reachable models are
 listed: the script gates on `pi --list-models`, which reflects the current credentials.
 Add `--favorites` for the starred lineup alone, `--slugs` for bare slugs, `--json` for
-structured output.
+structured output. Without `--sort strength`, rows are ordered by provider, then model lines and
+versions newest first.
 
 Capture the chosen slug and level as **plain strings** and substitute the literal text into the
 `pi` command (env vars do not survive across Bash calls).
@@ -88,12 +89,7 @@ Take the thinking level from that row's `THINKING` column; a level it does not l
 - Always include `--no-approve` so project-local extensions and skills in the reviewed repository
   are never loaded or trusted.
 - Do not pass `-nc` / `--no-context-files`; `AGENTS.md` and `CLAUDE.md` are useful review context.
-- Pass the prompt through the execution tool's raw stdin channel. Pi reads the whole prompt from
-  stdin in `-p` mode when no message argument is given.
-- Never interpolate the assembled prompt into a shell command, argument, variable, heredoc, or
-  `printf`/`echo` pipeline.
-- If the execution tool cannot pass raw stdin without shell interpolation, abort and report the
-  unsupported execution environment.
+- Deliver the prompt only as described in Prompt Transport.
 - Pi may become blocked during work, so periodic checks for blocking are necessary.
 - If pi returns an error, report it verbatim.
 
@@ -132,6 +128,31 @@ Do not pass the user's raw prompt directly. Assemble this prompt.
 Always include `[제약]`. Auto mode appends a system prompt that tells pi to prefer the shell for
 file changes; `[제약]` is what overrides it, so never abbreviate or drop those lines.
 
+## Prompt Transport
+
+The assembled prompt is data. Never place any of it in a shell command, argument, variable,
+heredoc, command substitution, or `printf`/`echo` pipeline.
+
+- **Raw stdin**: when the execution tool can write to the process's stdin, send the complete
+  prompt through it and close stdin.
+- **Prompt file**: otherwise, hand the prompt over as a file redirected to stdin. Claude Code's
+  Bash tool takes this path: it has no stdin input and the process sees `/dev/null`.
+  1. Pick a directory outside the workspace that only the current user can enter: the session
+     scratchpad when one is provided, else a fresh `mktemp -d` directory. Kept outside the
+     workspace, the file never shows up in a `git status` check.
+  2. Write the prompt with the file-writing tool, never a shell command, to a new file named
+     `pi-prompt-<random suffix>.txt`. A suffix fresh per invocation keeps parallel runs apart.
+  3. Append `< '<absolute path>'` to the command. Single quotes stop the shell from expanding `$`
+     or backticks in the path; abort if the path itself contains `'`.
+  4. Once the process has exited, on success, failure, or timeout alike, delete that one file and
+     `rmdir` the `mktemp -d` directory if one was made. Never delete by wildcard, and report a
+     failed deletion.
+- Do not use `@file` or add a message argument. `@file` wraps the text in a `<file>` tag,
+  and pi joins stdin, file text, and the first message with no separator. Pi trims stdin
+  and exits 0 without running when it is empty, so exit 0 alone does not prove the prompt
+  arrived; confirm the output answers the task.
+- If neither transport is available, abort and report the unsupported execution environment.
+
 ## What To Do
 
 1. List the reachable models with the `get_models.py` command above and remember the rows as plain strings.
@@ -147,10 +168,10 @@ file changes; `[제약]` is what overrides it, so never abbreviate or drop those
    `--tool-mode auto` keeps `bash` under the screener. `--tool-mode read` would drop `bash` from
    the allowlist regardless of what is passed here, which is the configuration that leaves pi
    unable to read git history.
-6. Start the command and send the complete assembled prompt through the execution tool's raw stdin
-   input facility, then close stdin. Do not construct a shell pipeline or place any prompt text in
-   the command string.
+6. Deliver the prompt as described in Prompt Transport: through raw stdin, closed afterward, or
+   as `< '<prompt file>'` appended to the command once the file is written.
 7. Execute with Bash and set timeout to 300000 ms. In a git repository, record
+   When a prompt file was used, delete it once the process has exited, including after a timeout.
    `git status --porcelain` immediately before the run so step 9 has something to compare against.
 8. Validate pi output against the real code.
 9. Re-run `git status --porcelain` and diff it against the step 7 snapshot. The gate's fast path
