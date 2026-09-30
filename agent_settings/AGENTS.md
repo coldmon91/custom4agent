@@ -19,6 +19,19 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
   version, and report what would be lost. Deploying, copying, and uploading are overwrites
   too. For a config file, ask the user whether any value must be preserved
 
+## Explaining
+When explaining or proposing something, show the big picture before implementation details, in this order:
+1. Now / After: what the problem is today and what changes, one or two sentences each
+2. Flow: numbered steps of who (user, agent, system) does what; at most 5 steps, one line each
+3. Examples: 2 ~ 3 input -> result pairs, including a success case and a refusal/failure case
+4. Done so far: in plain words, tied to the steps above
+5. Next: a numbered list; mark what the user has to decide
+6. End with a single confirmation question
+
+- Use file paths, function names, and internal terms only when needed; gloss each in one line on first use
+- Use tables and code blocks only for examples
+- Bring out detailed design only after the user agrees with the big picture
+
 ## Process Execution
 - Before/after execution: assess persistence and CPU/memory/disk/network impact; verify cleanup and host recovery
 - Minimum scope, concurrency, and resources; track spawned processes and resources

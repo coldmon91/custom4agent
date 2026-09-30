@@ -1,19 +1,9 @@
-# Shell / Bash Checklist
+# Shell / Bash
 
-Check for:
-- `main` function or script entry (shebang, sourcing)
-- function definitions and calls
-- trap handlers for signals
-- `case` dispatch and subcommand parsing
-- sourced helper scripts that register behavior
+## Entry points and registration
+- Script entry (shebang `#!/`), a `main` function, `"$1"` / `case` subcommand dispatch
+- `trap` signal handlers
+- Sourced helpers that register behavior: `source`, `. file`
 
-Useful search patterns:
-- `#!/`, `source `, `. `, `trap `, `case `, `"$1"`, `main()`
-
-## Dynamic Loading and Generated Code
-
-Check for:
-- `source`, `. file`, and `eval` patterns
-
-Dynamic-specific guidance:
-- Mark paths as low-confidence if sourced files or evaluated commands depend on environment or string-built commands.
+## Path-specific patterns
+- `source`, `. file`, or `eval` with env-dependent or string-built commands: low confidence.

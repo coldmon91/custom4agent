@@ -1,6 +1,6 @@
 ---
 name: diataxis-docs
-description: Use when writing, reviewing, or restructuring technical documentation — choosing what form a page should take, diagnosing a page that is hard to write or hard to follow, splitting an overloaded README or wiki page, naming doc pages or doc sections, or deciding what to improve next in a doc set. Covers tutorials, how-to guides, reference and explanation, and the boundaries between them.
+description: Use when creating new technical documentation or editing existing documentation, before drafting or making changes — including README files, wiki pages, guides, reference pages, and release notes. Do NOT trigger for read-only reading, summarizing, reviewing, or analyzing documents, or for documentation toolchain and API-doc generator setup that does not change documentation content.
 ---
 
 # Diátaxis Documentation
@@ -15,13 +15,16 @@ Diátaxis is a **guide, not a plan**. Don't design the four-section structure up
 
 ## When to Use
 
-- Writing a new doc page and unsure what form it should take
-- A page resists writing, or readers can't follow it
-- Auditing, splitting, or restructuring an existing doc set
-- Naming a doc page or section
-- Deciding what to improve next in documentation
+Load this skill **before drafting new technical documentation or modifying existing documentation content**, even when the document type is already clear.
 
-**Not for:** prose style and grammar, docs-toolchain setup (Sphinx/MkDocs/Docusaurus), API-doc generators, release notes.
+- Creating a new README, wiki page, guide, reference page, or release note
+- Updating, adding, removing, or rewriting existing documentation content
+- Editing wording, grammar, page titles, or section headings
+- Splitting or restructuring pages as part of a requested documentation change
+
+**Not for:** read-only reading, summarizing, reviewing, or analyzing documents; docs-toolchain setup (Sphinx/MkDocs/Docusaurus) or API-doc generator setup without documentation-content changes.
+
+For small edits, apply the guidance only to the requested content; do not restructure unrelated sections.
 
 ## The Compass — Use This First
 
