@@ -1,0 +1,140 @@
+{
+  "version": 1,
+  "tools": {
+    "readOnly": [
+      "read",
+      "grep",
+      "find",
+      "ls"
+    ],
+    "inRootWrite": [
+      "edit",
+      "write"
+    ],
+    "screenedShell": [
+      "bash"
+    ]
+  },
+  "shell": {
+    "readOnly": [
+      "awk",
+      "basename",
+      "cat",
+      "cksum",
+      "col",
+      "column",
+      "comm",
+      "cmp",
+      "date",
+      "df",
+      "diff",
+      "dirname",
+      "du",
+      "echo",
+      "false",
+      "fd",
+      "file",
+      "find",
+      "fold",
+      "grep",
+      "head",
+      "hostname",
+      "id",
+      "jq",
+      "ls",
+      "man",
+      "md5",
+      "md5sum",
+      "nl",
+      "od",
+      "paste",
+      "printf",
+      "ps",
+      "pwd",
+      "readlink",
+      "realpath",
+      "rev",
+      "rg",
+      "sha1sum",
+      "sha256sum",
+      "shasum",
+      "sleep",
+      "sort",
+      "stat",
+      "strings",
+      "tail",
+      "tr",
+      "tree",
+      "true",
+      "type",
+      "uname",
+      "uniq",
+      "uptime",
+      "wc",
+      "which",
+      "whoami",
+      "xxd",
+      "yes"
+    ],
+    "inRootWrite": [
+      "cp",
+      "mkdir",
+      "mv",
+      "sed",
+      "tee",
+      "touch"
+    ],
+    "builtins": [
+      ":",
+      "[",
+      "[[",
+      "break",
+      "continue",
+      "exit",
+      "export",
+      "read",
+      "return",
+      "set",
+      "shift",
+      "test",
+      "unset",
+      "wait"
+    ],
+    "gitReadOnly": [
+      "blame",
+      "cat-file",
+      "describe",
+      "diff",
+      "diff-tree",
+      "grep",
+      "log",
+      "ls-files",
+      "ls-tree",
+      "rev-list",
+      "rev-parse",
+      "shortlog",
+      "show",
+      "status",
+      "whatchanged"
+    ],
+    "gitInRootWrite": [
+      "add"
+    ],
+    "gitRemoteReadOnly": [
+      null,
+      "-v",
+      "--verbose",
+      "get-url",
+      "show"
+    ],
+    "npmReadOnly": [
+      "list",
+      "ls",
+      "outdated",
+      "ping",
+      "show",
+      "view",
+      "why"
+    ]
+  }
+}

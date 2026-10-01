@@ -68,7 +68,6 @@ Take the thinking level from that row's `THINKING` column; a level it does not l
 
 ## Rules
 
-- Reply in Korean.
 - Use non-interactive print mode: `pi -p`.
 - **Pi has no sandbox.** Unlike a sandboxed agent, nothing mechanically confines pi's writes or
   its `bash` commands to the workspace. The write boundary is prompt-level only, so the `[제약]`

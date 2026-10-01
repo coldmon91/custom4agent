@@ -67,7 +67,6 @@ listed level below it.
 
 ## Rules
 
-- Reply in Korean.
 - Use non-interactive `e`.
 - Use `codex -a never e -s read-only`.
 - Always include `--skip-git-repo-check`.

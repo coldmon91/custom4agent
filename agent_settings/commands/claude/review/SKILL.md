@@ -71,7 +71,6 @@ target level is absent, use the highest listed level below it.
 
 ## Rules
 
-- Reply in Korean.
 - Use non-interactive print mode: `claude -p`.
 - Always include `--restricted`. It removes the command-running tools and WebFetch, confines the
   file tools to the working directory, and refuses `bypassPermissions`, so read-only is enforced

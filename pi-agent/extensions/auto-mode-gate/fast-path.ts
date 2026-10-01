@@ -8,15 +8,12 @@
  */
 
 import { isInsideAnyRoot } from "./paths.ts";
-import { isAutoApprovedShellCommand } from "./shell/screen.ts";
+import { isAutoApprovedShellCommand, isReadOnlyShellCommand } from "./shell/screen.ts";
+import { getPermissionPolicy, type PermissionPolicy } from "./permission-policy.ts";
+import { referencesPermissionPolicy } from "./permission-policy-protection.ts";
 import { looksSensitive } from "./shell/command-policy.ts";
 import { getTrustedRoots } from "./trusted-roots.ts";
 import type { PendingAction, TrustBoundary } from "./types.ts";
-
-const READ_ONLY_TOOLS = new Set(["read", "grep", "find", "ls"]);
-const IN_ROOT_WRITE_TOOLS = new Set(["edit", "write"]);
-/** Only POSIX shell is screened; PowerShell syntax is not read by the screener. */
-const SCREENED_SHELL_TOOLS = new Set(["bash"]);
 
 /** The working directory plus whatever the user declared in trusted-roots.json. */
 export function trustedRootsFor(boundary: TrustBoundary): string[] {
@@ -43,21 +40,38 @@ export function isAutoApproved(
   action: PendingAction,
   boundary: TrustBoundary,
   roots: readonly string[] = trustedRootsFor(boundary),
+  policy: PermissionPolicy = getPermissionPolicy(),
 ): boolean {
-  if (READ_ONLY_TOOLS.has(action.toolName)) return true;
+  if (policy.problems.length > 0) return false;
+  if (policy.tools.readOnly.has(action.toolName)) return true;
 
-  if (IN_ROOT_WRITE_TOOLS.has(action.toolName)) {
+  if (requiresPermissionPolicyApproval(action, boundary, roots, policy)) return false;
+
+  if (policy.tools.inRootWrite.has(action.toolName)) {
     const path = targetPath(action);
     // A malformed call has no path to vet, so let the classifier see it.
     if (path === undefined || looksSensitive(path)) return false;
     return isInsideAnyRoot(path, roots, boundary.cwd);
   }
 
-  if (SCREENED_SHELL_TOOLS.has(action.toolName)) {
+  if (policy.tools.screenedShell.has(action.toolName)) {
     const command = shellCommand(action);
     if (command === undefined) return false;
-    return isAutoApprovedShellCommand(command, { cwd: boundary.cwd, roots });
+    return isAutoApprovedShellCommand(command, { cwd: boundary.cwd, roots, policy });
   }
 
   return false;
+}
+
+/** Policy changes require user approval even when a classifier would allow them. */
+export function requiresPermissionPolicyApproval(
+  action: PendingAction,
+  boundary: TrustBoundary,
+  roots: readonly string[],
+  policy: PermissionPolicy,
+): boolean {
+  if (policy.tools.readOnly.has(action.toolName) || !referencesPermissionPolicy(action, boundary.cwd)) return false;
+  const command = shellCommand(action);
+  return action.toolName !== "bash" || command === undefined ||
+    !isReadOnlyShellCommand(command, { cwd: boundary.cwd, roots, policy });
 }

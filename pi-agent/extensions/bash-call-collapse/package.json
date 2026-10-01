@@ -1,0 +1,9 @@
+{
+  "name": "pi-bash-call-collapse",
+  "private": true,
+  "type": "module",
+  "description": "Show only the first line of a multi-line bash command until tool output is expanded",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

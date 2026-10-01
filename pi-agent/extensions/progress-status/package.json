@@ -1,0 +1,9 @@
+{
+  "name": "pi-progress-status",
+  "private": true,
+  "type": "module",
+  "description": "Display live agent stages and elapsed time without exposing tool arguments",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}

@@ -88,23 +88,51 @@ State what you tried, what remains blocked, and the minimum user action needed.
 
 ## Completion Report
 
-- Close any task that changed code, configuration, or system state by answering four
-questions in this order: what changed, why this approach, what it changes for the user,
-and what remains. Shorten the wording when the change is small; never drop one of the four.
-- What changed: each file as `path/to/file.rs:42` with its core change.
-Do not paste diffs or replay tool output.
-- Why this approach: the design choice and the reason for it — not the root cause of the
-problem, not a narration of the steps. Name a rejected alternative when the tradeoff is real.
-- What it changes: what improves for the user and what it costs — behavior, performance,
-compatibility, side effects on adjacent code. Say plainly when behavior is unchanged.
-Carry the verification result here, naming whatever stayed unverified.
-- What remains: blocked scope, follow-up the change implies, decisions that need the user.
-State plainly that nothing remains rather than inventing a next step.
-- Use the four as explicit section labels once the change spans more than one file;
-keep them inline as prose for a smaller change.
-- Scale by length, not by omission — a one-line edit still answers all four in one or two
-lines. Skip the report only for a question, a lookup, or a read-only investigation that
-changed nothing.
+- Close any task you acted on — a change to code, configuration, or system state, including
+an attempt that failed or was abandoned — with the report below.
+Skip it only for a question, a lookup, or a read-only investigation.
+- Fill every line of the template in order. Keep each `Why` line even for a one-line
+edit: shorten the wording, never drop a line.
+Translate the labels into the user's language, keeping their order and structure.
+
+```markdown
+### Task
+- What: <what was done>
+- Why: <the goal or the problem that prompted it>
+
+### Approach
+- How: <how it was done>
+- Why: <why this method over the alternative>
+
+### Result
+- Verdict: <success | partial success | failure>
+- Verified: <command or check> → <outcome>; Unverified: <what stayed unverified, or none>
+- Why: <why the result came out this way, backed by evidence>
+
+### Changes
+- `path/to/file.rs:42`: <core change>
+- Impact: <what changes for the user and what it costs>
+
+### Failure Cause
+- Cause: <the blocking cause>
+- Evidence: <how it was confirmed — error text, command output, a check>
+- Tried: <what was tried>
+- State: <changes kept, reverted, or none>
+
+### Next
+- <[User decision] marks a decision the user owns>, or none
+```
+
+- `Changes` on success, `Failure Cause` on failure; on partial success give both as separate
+sections — never merge them into one.
+- Approach `Why`: the design choice and its reason, not a narration of the steps.
+Name the rejected alternative when the tradeoff is real.
+- Result `Why`: the cause of the outcome, not the approach's reason — what made it work,
+or what blocked it.
+- `Impact`: behavior, performance, compatibility, side effects on adjacent code.
+Say plainly when behavior is unchanged. Do not paste diffs or replay tool output.
+- `Next`: blocked scope, follow-up the result implies, decisions that need the user.
+Write none rather than inventing a next step.
 
 ## Context Management
 

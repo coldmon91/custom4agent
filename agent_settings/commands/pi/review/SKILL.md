@@ -70,7 +70,6 @@ Take the thinking level from that row's `THINKING` column; a level it does not l
 
 ## Rules
 
-- Reply in Korean.
 - Use non-interactive print mode: `pi -p`.
 - **Pi has no sandbox.** `bash` is in the allowlist so pi can reach repository history —
   `git show <tag>:<path>`, `git log`, `git diff` — which the `read` tool cannot see because it

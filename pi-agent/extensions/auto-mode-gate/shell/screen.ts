@@ -9,17 +9,13 @@
  */
 
 import { isInsideAnyRoot } from "../paths.ts";
+import { getPermissionPolicy, type PermissionPolicy } from "../permission-policy.ts";
+import { isPermissionPolicyPath } from "../permission-policy-protection.ts";
 import {
   COMMAND_PREFIXES,
   HEADER_WORDS,
-  IN_ROOT_WRITE_COMMANDS,
-  READ_ONLY_COMMANDS,
-  READ_ONLY_GIT_REMOTE_ARGUMENTS,
-  READ_ONLY_GIT_SUBCOMMANDS,
-  READ_ONLY_NPM_SUBCOMMANDS,
   REJECTED_ARGUMENTS,
   REJECTED_CURL_FLAGS,
-  SHELL_BUILTINS,
   STRUCTURAL_WORDS,
   hijacksLookup,
   looksSensitive,
@@ -30,6 +26,7 @@ export interface ScreenContext {
   cwd: string;
   /** Directories a write may land in without being classified. */
   roots: readonly string[];
+  policy?: PermissionPolicy;
 }
 
 /**
@@ -37,7 +34,7 @@ export interface ScreenContext {
  * because it moves the base that later relative paths resolve against, which
  * this screener resolves against the session's directory instead.
  */
-type SegmentVerdict = "read-only" | "write" | "chdir" | "reject";
+type SegmentVerdict = "read-only" | "write" | "stage" | "chdir" | "reject";
 
 /** Discards output instead of writing a file, so it needs no containment check. */
 const NULL_SINKS = new Set(["/dev/null", "/dev/stdout", "/dev/stderr"]);
@@ -55,7 +52,7 @@ function operands(tokens: readonly ShellToken[]): ShellToken[] {
 
 function landsInsideRoots(token: ShellToken, context: ScreenContext): boolean {
   // An unexpanded `$VAR` has no value here, so its destination is unknowable.
-  if (token.expanded) return false;
+  if (token.expanded || isPermissionPolicyPath(token.text, context.cwd)) return false;
   return isInsideAnyRoot(token.text, context.roots, context.cwd);
 }
 
@@ -103,22 +100,22 @@ function isInPlaceSed(tokens: readonly ShellToken[]): boolean {
 }
 
 /** `git` is read-only only for the subcommands that cannot change the repository. */
-function isReadOnlyGit(tokens: readonly ShellToken[]): boolean {
+function gitVerdict(tokens: readonly ShellToken[], policy: PermissionPolicy): SegmentVerdict {
   const subcommand = tokens[1];
   // A global option before the subcommand (`git -c ...`) can change what runs.
-  if (!subcommand || subcommand.operator || isOption(subcommand.text)) return false;
+  if (!subcommand || subcommand.operator || isOption(subcommand.text)) return "reject";
   if (subcommand.text === "remote") {
-    return READ_ONLY_GIT_REMOTE_ARGUMENTS.has(tokens[2]?.text);
+    return policy.shell.gitRemoteReadOnly.has(tokens[2]?.text) ? "read-only" : "reject";
   }
   // Staging only moves files into the index of the repository already in scope.
-  if (subcommand.text === "add") return true;
-  return READ_ONLY_GIT_SUBCOMMANDS.has(subcommand.text);
+  if (policy.shell.gitInRootWrite.has(subcommand.text)) return "stage";
+  return policy.shell.gitReadOnly.has(subcommand.text) ? "read-only" : "reject";
 }
 
-function isReadOnlyNpm(tokens: readonly ShellToken[]): boolean {
+function isReadOnlyNpm(tokens: readonly ShellToken[], policy: PermissionPolicy): boolean {
   const subcommand = tokens[1];
   if (!subcommand || subcommand.operator) return false;
-  return READ_ONLY_NPM_SUBCOMMANDS.has(subcommand.text);
+  return policy.shell.npmReadOnly.has(subcommand.text);
 }
 
 /** `curl` without the flags that upload, authenticate, or write a file. */
@@ -169,7 +166,9 @@ function toRunningCommand(tokens: readonly ShellToken[]): ShellToken[] | "header
   return words;
 }
 
-function screenSegment(tokens: readonly ShellToken[], context: ScreenContext): SegmentVerdict {
+function screenSegment(
+  tokens: readonly ShellToken[], context: ScreenContext, policy: PermissionPolicy,
+): SegmentVerdict {
   if (tokens.some((token) => looksSensitive(token.text) || hijacksLookup(token.text))) {
     return "reject";
   }
@@ -198,7 +197,7 @@ function screenSegment(tokens: readonly ShellToken[], context: ScreenContext): S
   // refusing to approve a chdir and a write in the same command line.
   if (command === "cd") return "chdir";
 
-  if (SHELL_BUILTINS.has(command)) return effect;
+  if (policy.shell.builtins.has(command)) return effect;
 
   // `command -v foo` asks where a binary is; `command foo` runs it.
   if (command === "command") {
@@ -206,17 +205,21 @@ function screenSegment(tokens: readonly ShellToken[], context: ScreenContext): S
     return flag === "-v" || flag === "-V" ? effect : "reject";
   }
 
-  if (command === "git") return isReadOnlyGit(words) ? effect : "reject";
+  if (command === "git") {
+    const verdict = gitVerdict(words, policy);
+    if (verdict === "read-only") return effect;
+    return verdict === "stage" && redirections.writesFile ? "write" : verdict;
+  }
 
-  if (command === "npm") return isReadOnlyNpm(words) ? effect : "reject";
+  if (command === "npm") return isReadOnlyNpm(words, policy) ? effect : "reject";
 
   if (command === "curl") return isPlainCurlRead(words) ? effect : "reject";
 
   if (command === "sed" && !isInPlaceSed(words)) return effect;
 
-  if (READ_ONLY_COMMANDS.has(command)) return effect;
+  if (policy.shell.readOnly.has(command)) return effect;
 
-  if (IN_ROOT_WRITE_COMMANDS.has(command)) {
+  if (policy.shell.inRootWrite.has(command)) {
     // `sed -i script file`, `cp a b`, `mkdir dir`: every target has to be placeable.
     const targets = operands(words).slice(1);
     return targets.length > 0 && targets.every((token) => landsInsideRoots(token, context))
@@ -231,14 +234,26 @@ function screenSegment(tokens: readonly ShellToken[], context: ScreenContext): S
  * `true` when every segment of the command line is safe by construction.
  */
 export function isAutoApprovedShellCommand(command: string, context: ScreenContext): boolean {
-  const reading = readCommand(command);
-  if (!reading.readable) return false;
-
-  const verdicts = reading.segments.map((segment) => screenSegment(segment, context));
+  const verdicts = screenCommand(command, context);
+  if (!verdicts) return false;
 
   if (verdicts.includes("reject")) return false;
 
   // With the working directory moved, a later relative write would be checked
   // against the wrong base, so the two are never approved in one command line.
   return !(verdicts.includes("chdir") && verdicts.includes("write"));
+}
+
+function screenCommand(command: string, context: ScreenContext): SegmentVerdict[] | undefined {
+  const policy = context.policy ?? getPermissionPolicy();
+  if (policy.problems.length > 0) return undefined;
+  const reading = readCommand(command);
+  if (!reading.readable) return undefined;
+  return reading.segments.map((segment) => screenSegment(segment, context, policy));
+}
+
+/** Used to distinguish policy inspection from policy modification. */
+export function isReadOnlyShellCommand(command: string, context: ScreenContext): boolean {
+  const verdicts = screenCommand(command, context);
+  return verdicts !== undefined && verdicts.every((verdict) => verdict === "read-only" || verdict === "chdir");
 }

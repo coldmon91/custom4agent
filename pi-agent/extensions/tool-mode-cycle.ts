@@ -2,6 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { type AutoModeGate, createAutoModeGate } from "./auto-mode-gate/gate.ts";
 import { pinClassifierModel } from "./auto-mode-gate/classifier.ts";
 import { parseModelRef } from "./auto-mode-gate/classifier-config.ts";
+import { formatApprovalPrompt } from "./auto-mode-gate/approval-prompt.ts";
 
 type ToolMode = "read" | "write" | "auto";
 
@@ -318,10 +319,8 @@ export default function toolModeCycle(pi: ExtensionAPI) {
       };
     }
 
-    const approved = await ctx.ui.confirm(
-      `Auto mode: ${decision.rule}`,
-      `${decision.rationale}\n\nRun \`${event.toolName}\` anyway?`,
-    );
+    const prompt = formatApprovalPrompt(decision, event.toolName);
+    const approved = await ctx.ui.confirm(prompt.title, prompt.message);
 
     if (approved) return;
 

@@ -71,7 +71,6 @@ target level is absent, use the highest listed level below it.
 
 ## Rules
 
-- Reply in Korean.
 - Use non-interactive print mode: `claude -p`.
 - **`-p` mode has no sandbox.** `--permission-mode acceptEdits` auto-approves edits and the
   allowed `Bash` tool runs real commands, so nothing mechanically confines the run to the

@@ -14,7 +14,8 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ClassifierUnavailableError, classify, resolveClassifierModel } from "./classifier.ts";
 import { getClassifierConfig, getClassifierConfigPath } from "./classifier-config.ts";
-import { isAutoApproved, trustedRootsFor } from "./fast-path.ts";
+import { isAutoApproved, requiresPermissionPolicyApproval, trustedRootsFor } from "./fast-path.ts";
+import { getPermissionPolicy, getPermissionPolicyPath } from "./permission-policy.ts";
 import { getClassifierSystemPrompt, renderTrustBoundary } from "./ruleset.ts";
 import { getTrustedRoots, getTrustedRootsPath } from "./trusted-roots.ts";
 import { buildClassifierRequest } from "./transcript.ts";
@@ -86,6 +87,7 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
     describeConfig(ctx) {
       const config = getClassifierConfig();
       const chain = config.models.map((m) => `${m.provider}/${m.modelId}`).join(" → ");
+      const policy = getPermissionPolicy();
       const trusted = getTrustedRoots();
       const roots = [ctx.cwd, ...trusted.directories].join("\n           ");
       const lines = [
@@ -93,6 +95,7 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
         `chain:     ${chain}`,
         `reasoning: ${config.reasoning}    timeout: ${config.timeoutMs}ms`,
         `config:    ${getClassifierConfigPath()}`,
+        `policy:    ${getPermissionPolicyPath()}`,
         "",
         "Skipping the screener entirely: read-only tools, read-only shell commands,",
         "and writes landing in a trusted root.",
@@ -102,6 +105,10 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
 
       if (config.problems.length > 0) {
         lines.push(...config.problems.map((problem) => `problem:   ${problem}`));
+      }
+
+      if (policy.problems.length > 0) {
+        lines.push(...policy.problems.map((problem) => `problem:   ${problem}`));
       }
 
       if (trusted.problems.length > 0) {
@@ -115,7 +122,13 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
       const activeBoundary = await boundaryFor(ctx);
       const roots = trustedRootsFor(activeBoundary);
 
-      if (isAutoApproved(action, activeBoundary, roots)) {
+      const policy = getPermissionPolicy();
+      if (requiresPermissionPolicyApproval(action, activeBoundary, roots, policy)) {
+        return requireApproval(ctx, "Permission Policy Change",
+          "자동 승인 정책을 변경하는 작업이므로 사용자 확인이 필요합니다.");
+      }
+
+      if (isAutoApproved(action, activeBoundary, roots, policy)) {
         return { outcome: "allow", rule: "Read-Only / Trusted Root" };
       }
 
