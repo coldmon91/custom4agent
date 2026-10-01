@@ -4,6 +4,11 @@
   "type": "module",
   "description": "Display live agent stages and elapsed time without exposing tool arguments",
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "@earendil-works/pi-tui": "0.99.2"
   }
 }
