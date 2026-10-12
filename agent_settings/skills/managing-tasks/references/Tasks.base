@@ -2,6 +2,8 @@ filters:
   and:
     - file.inFolder("Tasks")
     - file.hasProperty("status")
+formulas:
+  redmine_link: if(note.redmine, link("https://projects.rsupport.com/issues/" + note.redmine.toString(), "#" + note.redmine.toString()))
 properties:
   file.name:
     displayName: 이름
@@ -9,7 +11,7 @@ properties:
     displayName: 시작일
   note.end-date:
     displayName: 종료일
-  note.redmine:
+  formula.redmine_link:
     displayName: Redmine
 views:
   - type: table
@@ -18,7 +20,7 @@ views:
       - file.name
       - started
       - end-date
-      - redmine
+      - formula.redmine_link
       - subtask
       - status
       - git-commit
@@ -29,7 +31,7 @@ views:
     columnSize:
       file.name: 300
       note.started: 125
-      note.redmine: 85
+      formula.redmine_link: 85
   - type: table
     name: 할 일
     filters:
@@ -37,13 +39,13 @@ views:
         - status == "todo"
     order:
       - file.name
-      - redmine
+      - formula.redmine_link
     sort:
       - property: file.name
         direction: ASC
     columnSize:
       file.name: 400
-      note.redmine: 85
+      formula.redmine_link: 85
   - type: table
     name: 완료
     filters:
@@ -53,7 +55,7 @@ views:
       - file.name
       - started
       - end-date
-      - redmine
+      - formula.redmine_link
     sort:
       - property: end-date
         direction: DESC
@@ -61,7 +63,7 @@ views:
       file.name: 180
       note.started: 125
       note.end-date: 125
-      note.redmine: 85
+      formula.redmine_link: 85
   - type: tm-timeline
     name: 타임라인
     groupBy:

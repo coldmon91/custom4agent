@@ -1,0 +1,17 @@
+{
+  "name": "managing-tasks-scripts",
+  "private": true,
+  "type": "module",
+  "description": "CLI that applies managing-tasks rules to Obsidian Task notes. Runtime needs only Node; devDependencies are for type checking.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"tests/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.3"
+  }
+}

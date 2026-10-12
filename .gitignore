@@ -37,3 +37,6 @@ pi-agent/tmp/
 # Machine-local Pi extensions
 pi-agent/extensions/orca-*
 pi-agent/extensions/herdr-*
+
+# Skill script dev tooling (typescript, @types/node)
+agent_settings/skills/*/scripts/node_modules/
