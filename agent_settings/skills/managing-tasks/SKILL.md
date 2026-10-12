@@ -1,6 +1,6 @@
 ---
 name: managing-tasks
-description: "Use when the user wants to create, start, log progress on, finish, or list their work tasks (업무 Task) in the Obsidian vault Tasks folder. Trigger on '태스크 만들어줘', 'Task 추가', '이거 시작할게', '오늘 한 일 기록해줘', '작업 로그 남겨줘', '하위 작업 추가', 'subtask', '커밋 기록', '레드마인 번호 연결', '끝났어', '완료 처리', '진행 중인 작업 뭐 있어', '할 일 목록'."
+description: "Use when the user wants to create, start, log progress on, finish, or list their work tasks (업무 Task) in the Obsidian vault Tasks folder. Trigger on '태스크 만들어줘', 'Task 추가', '이거 시작할게', '오늘 한 일 기록해줘', '작업 로그 남겨줘', '하위 작업 추가', 'subtask', '커밋 기록', '레드마인 번호 연결', '끝났어', '완료 처리', '진행 중인 작업 뭐 있어', '할 일 목록', '태스크 관리 처음 설정', 'onboarding'."
 ---
 # Managing Tasks — Obsidian Task 노트 관리
 
@@ -15,6 +15,7 @@ description: "Use when the user wants to create, start, log progress on, finish,
 
 ```bash
 S=~/.config/managing-tasks/setting.json
+[ -f "$S" ] || echo "setting.json 없음 → references/onboarding.md"
 V="$(jq -r .vault "$S")"; T="$V/$(jq -r .tasks "$S")"; TPL="$V/$(jq -r .templates "$S")"
 # Task: $T/<YYYY>/{todo,in_progress,done}/<Task 이름>/<Task 이름>.md
 ```
@@ -24,10 +25,12 @@ V="$(jq -r .vault "$S")"; T="$V/$(jq -r .tasks "$S")"; TPL="$V/$(jq -r .template
 ```
 
 - `vault`는 절대 경로, `tasks`·`templates`는 vault 기준 상대 경로
-- 설정 파일이 없거나 `vault` 경로가 없으면 중단하고 사용자에게 vault 경로를 물어 위 형식으로 생성 (`tasks`·`templates` 기본값 `Tasks`, `Templates`). 경로를 추측하지 않음
+- `$TPL`: Obsidian Templates 플러그인용 템플릿 사본 폴더. skill은 원본(아래 "Task 노트 템플릿")과 비교할 때만 읽음
+- 설정 파일이 없거나 `vault`·`$T` 경로가 없으면 하던 동작을 멈추고 `references/onboarding.md` 절차를 먼저 진행. 사용자가 처음 설정을 요청할 때도 동일. 경로를 추측하지 않음
 
 - Task 1개 = 폴더 1개 + Task 노트 `<Task 이름>.md` (첨부·리뷰 문서·Subtask 노트는 같은 폴더에 둠)
 - `<YYYY>`: Task 생성 연도. 상태가 바뀌어도 연도 폴더는 유지
+- 생성·상태 전환 전에 대상 상태 폴더(`$T/<YYYY>/<상태>/`)가 없으면 `mkdir -p`로 만듦 (새해 첫 Task, 그 해의 첫 시작·완료)
 - 제목: `<컴포넌트> - <내용>` (예: `rsmuxer - 메모리 누수 조사`, `session3 - openssl 3.5.6 적용`)
   - 컴포넌트: `rsupport` skill의 서버 컴포넌트 이름, 버전 접미사 포함 가능(`session3`). 소문자
   - 사용자 말에서 컴포넌트를 특정할 수 없으면 생성 전에 사용자에게 확인
@@ -37,10 +40,19 @@ V="$(jq -r .vault "$S")"; T="$V/$(jq -r .tasks "$S")"; TPL="$V/$(jq -r .template
 
 ## Task 노트 템플릿
 
-원본: `$TPL/task.md` (Obsidian Templates 플러그인과 공유).
-생성 시 이 파일을 읽어 아래만 채우고 나머지 구조는 그대로 유지.
+원본: 이 skill 폴더의 `references/task.md` (Subtask 노트는 `references/subtask.md`).
+생성 시 원본을 읽어 아래만 채우고 나머지 구조는 그대로 유지.
 - `# ` 헤딩 → 제목. frontmatter에는 제목 필드가 없음 (제목 = 헤딩 = 폴더 이름 = 파일 이름)
+- `task-id:` → `"<YYYY>-<6자리 연번>"`. `<YYYY>`는 Task 연도 폴더, 번호는 그 연도의 기존 최대 번호 + 1 (첫 Task면 `000001`). 아래 명령으로 계산하고, 기록 직후 같은 값이 `$T`에 하나뿐인지 확인 (`rg -l -F 'task-id: "<값>"' "$T"`). 둘 이상이면(동시 생성) 다시 계산해 교체. 부여 후에는 이름 변경·상태 전환에도 바꾸지 않음
 - `redmine:` → 번호, `## 배경` 첫 항목 → `Redmine #<번호>` (번호가 있을 때만)
+- `priority:` → 사용자가 말한 우선순위 하나 (`low`, `medium`, `high`, `critical`). 말하지 않았으면 템플릿의 `"{low/medium/high/critical}"`을 지우고 빈 값. 생성 후에도 사용자가 말하면 갱신
+- `agent-session:` → 현재 세션 (아래 "에이전트 세션")
+
+```bash
+Y=2026  # Task 연도 폴더
+N="$(rg -o --no-filename -r '$1' "^task-id: \"?$Y-(\d{6})\"?\s*$" "$T" | sort -n | tail -1)"
+printf 'task-id: "%s-%06d"\n' "$Y" "$((10#${N:-0} + 1))"
+```
 
 채운 예:
 
@@ -49,11 +61,15 @@ V="$(jq -r .vault "$S")"; T="$V/$(jq -r .tasks "$S")"; TPL="$V/$(jq -r .template
 status: todo
 started:
 end-date:
+task-id: "2026-000007"
 redmine: 48213
 tags:
   - task
 subtask:
 git-commit:
+priority:
+agent-session:
+  - claude --resume 4be36bcc-19f2-4fa2-b15f-d93a7dfe4460
 ---
 # rsmuxer - 메모리 누수 조사
 
@@ -62,9 +78,11 @@ git-commit:
 ...
 ```
 
-- 템플릿 파일이 없으면 생성을 중단하고 사용자에게 알림
+- 원본 파일이 없으면 생성을 중단하고 사용자에게 알림
+- 원본을 읽을 때 `$TPL/`의 같은 이름 사본과 `diff`. 다르거나 사본이 없으면 원본으로 진행하고 보고 끝에 차이를 한 줄로 알림. 사본은 수정하지 않음
 - 값이 없는 필드도 키는 남김 (빈 값)
-- `subtask`, `git-commit`은 YAML 목록 (`  - ` 들여쓰기 항목). 비어 있으면 키만
+- 예전에 만든 Task에 템플릿 키가 없으면 템플릿 순서 위치에 추가 (`end-date` 다음 `task-id`, `git-commit` 다음 `priority`, `agent-session`). `task-id`는 조회를 제외한 동작에서 바로 부여, `priority`·`agent-session`은 값을 기록할 때 추가
+- `subtask`, `git-commit`, `agent-session`은 YAML 목록 (`  - ` 들여쓰기 항목). 비어 있으면 키만
 - `redmine`: 대표 이슈 번호 하나, 숫자만 (`redmine: 48213`). `[ ]`, `#`, 따옴표 없이. 없으면 빈 값
 - 추가 관련 이슈: `## 배경`에 `- 관련: #<번호>`로 기록
 - 사용자가 준 정보만 채움. 목표·배경을 추측해 쓰지 않음
@@ -82,6 +100,8 @@ git-commit:
 | 커밋·Redmine 연결 | 이동 없음 | `git-commit`, `redmine` (아래 "커밋과 Redmine") |
 | 이름 변경 | 이동 없음 (아래 "이름 변경") | 변경 없음 |
 | 조회 | 이동 없음 | 읽기만 |
+
+조회를 제외한 모든 동작은 `agent-session`에 현재 세션도 기록 (아래 "에이전트 세션").
 
 **생성**
 1. 대상 폴더가 있거나 vault에 같은 이름의 노트가 있으면(`fd -F "<Task 이름>.md" "$V"`) 덮어쓰지 않고 사용자에게 확인
@@ -154,7 +174,7 @@ git-commit:
 
 하위 작업 1개 = Task 폴더 안의 Subtask 노트 1개. 목록은 Task 노트의 `subtask`, 상태는 각 Subtask 노트의 `status`(`todo`/`done`)가 유일한 기록.
 - 추가
-  1. 원본 `$TPL/subtask.md`를 읽어 `parent:` → 상위 Task 이름(링크 없이 텍스트), `# ` 헤딩 → 하위 작업 이름. `status: todo`는 그대로
+  1. 원본 `references/subtask.md`를 읽어 (사본 비교는 "Task 노트 템플릿"과 동일) `parent:` → 상위 Task 이름(링크 없이 텍스트), `# ` 헤딩 → 하위 작업 이름. `status: todo`는 그대로
   2. `<Task 폴더>/<하위 작업 이름>.md`로 생성. 이름 규칙은 폴더 이름과 동일, 유일성 확인은 "자료 파일"과 동일, Task 이름은 사용 불가. 같은 경로가 있으면 덮어쓰지 않고 확인
   3. Task 노트의 `subtask`에 `  - "[[<하위 작업 이름>]]"` 추가. 큰따옴표 필수 (없으면 YAML이 중첩 목록으로 읽음)
 - 완료: Subtask 노트 `status: done`, 그리고 상위 Task 노트의 `## 작업 로그` 오늘 날짜 아래에 `- [[<하위 작업 이름>]] 완료` 기록
@@ -195,6 +215,38 @@ Redmine 번호 추가:
 - 커밋 메시지·브랜치 이름의 `#<번호>` 중 Task에 없는 번호 → 사용자 확인 후 위 규칙대로 추가
 - Task에 이미 있는 번호는 중복 추가하지 않음
 
+**에이전트 세션**
+
+Task 노트 frontmatter의 `agent-session`에 이 Task를 다룬 에이전트 세션의 재개 명령을 기록.
+- 대상: 지금 이 skill을 실행 중인 세션 하나. 과거·다른 세션은 찾지 않음
+- 시점: 조회를 제외하고 Task 노트나 Subtask 노트를 바꾸는 모든 동작 (생성 포함). Subtask 노트에는 필드가 없으므로 상위 Task 노트에 기록
+- 같은 줄이 이미 있으면 추가하지 않음. 새 항목은 목록 끝에
+- 세션 ID는 자신이 실행 중인 도구의 행만 사용. 다른 도구를 위임 실행하면 상위 도구의 환경 변수가 상속되어 함께 보임
+
+| 도구 | 세션 ID | 기록 형식 |
+|---|---|---|
+| Claude Code | `$CLAUDE_CODE_SESSION_ID` | `claude --resume <id>` |
+| Codex | `$CODEX_THREAD_ID` | `codex resume <id>` |
+| pi | `$PI_SESSION_ID` | `pi --session <id>` |
+| opencode | 아래 DB 조회 (환경 변수 `OPENCODE=1`) | `opencode -s <id>` |
+
+opencode는 세션 ID 환경 변수가 없으므로 시작 폴더의 가장 최근 상위 세션을 조회. 작업 폴더를 바꾸지 않은 Bash 호출에서 실행:
+
+```bash
+D="$(pwd | sed "s/'/''/g")"
+sqlite3 -readonly ~/.local/share/opencode/opencode.db \
+  "select id from session where directory = '$D' and parent_id is null order by time_updated desc limit 1"
+```
+
+- 세션 ID를 얻지 못하면 (변수가 비어 있음, 조회 결과 없음) 기록을 건너뛰고 보고에 한 줄로 알림. ID를 추측하지 않음
+- 예전 형식 Task (frontmatter 없음)에는 기록하지 않음
+
+```markdown
+agent-session:
+  - claude --resume 4be36bcc-19f2-4fa2-b15f-d93a7dfe4460
+  - codex resume 01a12e85-c8ac-7e51-a493-7a9b7bf25197
+```
+
 **Redmine 갱신 확인**
 
 Task에 Redmine 번호(`redmine`, `## 배경`의 `관련: #<번호>`, Subtask 노트의 `redmine`)가 있으면, 생성·조회를 제외하고 Task를 다루는 모든 동작에서 확인.
@@ -224,6 +276,7 @@ Task에 Redmine 번호(`redmine`, `## 배경`의 `관련: #<번호>`, Subtask �
 3. 갱신 내용
    - `## 작업 로그`: 오늘 날짜 아래에 이 대화에서 확인된 결과·결정을 항목별로 기록. 기존 로그와 중복되는 항목은 제외
    - `git-commit`, `redmine`: 위 "커밋과 Redmine" 규칙대로
+   - `agent-session`: 위 "에이전트 세션" 규칙대로
    - `### Redmine`: 위 "Redmine 갱신 확인" 규칙대로
    - 하위 작업: 이 대화에서 끝난 것이 확인된 Subtask 노트만 `status: done` (위 "하위 작업"의 완료 절차)
    - `### 진행 상태`: 위 "진행 상태" 규칙대로 교체
@@ -278,3 +331,12 @@ frontmatter 없는 단일 `.md`나 폴더 (예: `in_progress/session3 openssl 3.
 | Redmine 댓글을 날짜 로그에 쓰거나 원문 그대로 복사 | `### Redmine`에 한 줄 요약 |
 | 첫 확인에서 기존 댓글을 모두 기록 | 기준선 한 줄만 |
 | vault 경로를 skill에 하드코딩하거나 추측 | `setting.json`에서 읽고, 없으면 사용자에게 질문 |
+| vault `$TPL/`의 템플릿으로 생성 | `references/` 원본으로 생성, 사본은 비교만 |
+| `priority`에 `"{low/medium/high/critical}"`를 그대로 둠 | 사용자가 말한 값 하나, 없으면 빈 값 |
+| `agent-session`에 세션 ID만 기록 | 재개 명령 (`claude --resume <id>`) |
+| 과거 세션을 찾아 `agent-session`에 추가 | 현재 세션 하나만 |
+| 상속된 다른 도구의 세션 변수 사용 | 자신이 실행 중인 도구의 변수만 |
+| 예전 Task에 `agent-session` 키가 없어 기록 생략 | 템플릿 순서 위치에 키 추가 후 기록 |
+| `task-id`에 `"{YYYY}-000000"`을 그대로 두거나 번호를 추측 | 계산 명령으로 연도별 최대 번호 + 1 |
+| `task-id` 연도를 오늘 기준으로 씀 | Task 연도 폴더 기준 (예외: onboarding 샘플은 `1900-000001` 고정) |
+| 이름 변경·상태 전환 때 `task-id` 재부여 | 한 번 부여하면 유지 |

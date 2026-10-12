@@ -1,0 +1,85 @@
+filters:
+  and:
+    - file.inFolder("Tasks")
+    - file.hasProperty("status")
+properties:
+  file.name:
+    displayName: 이름
+  note.started:
+    displayName: 시작일
+  note.end-date:
+    displayName: 종료일
+  note.redmine:
+    displayName: Redmine
+views:
+  - type: table
+    name: 진행 중
+    order:
+      - file.name
+      - started
+      - end-date
+      - redmine
+      - subtask
+      - status
+      - git-commit
+      - tags
+    sort:
+      - property: started
+        direction: DESC
+    columnSize:
+      file.name: 300
+      note.started: 125
+      note.redmine: 85
+  - type: table
+    name: 할 일
+    filters:
+      and:
+        - status == "todo"
+    order:
+      - file.name
+      - redmine
+    sort:
+      - property: file.name
+        direction: ASC
+    columnSize:
+      file.name: 400
+      note.redmine: 85
+  - type: table
+    name: 완료
+    filters:
+      and:
+        - status == "done"
+    order:
+      - file.name
+      - started
+      - end-date
+      - redmine
+    sort:
+      - property: end-date
+        direction: DESC
+    columnSize:
+      file.name: 180
+      note.started: 125
+      note.end-date: 125
+      note.redmine: 85
+  - type: tm-timeline
+    name: 타임라인
+    groupBy:
+      property: status
+      direction: ASC
+    startProp: note.started
+    endProp: note.end-date
+    includeUndated: true
+    scale: day
+    labelWidth: 300
+  - type: kanban
+    name: 칸반
+    groupBy:
+      property: status
+      direction: ASC
+    groupOrder:
+      - todo
+      - in_progress
+      - done
+    columnWidth: 440
+    imageAspectRatio: 0.6
