@@ -113,6 +113,13 @@ export function appendListItem(lines: string[], key: string, rawItem: string): v
   lines.splice(insertAt, 0, `  - ${rawItem}`);
 }
 
+/** Replaces the whole entry with a block list of raw YAML items (no items leaves just `key:`). */
+export function setList(lines: string[], key: string, rawItems: readonly string[]): void {
+  ensureKey(lines, key);
+  const entry = findEntry(lines, key)!;
+  lines.splice(entry.start, entry.end - entry.start, `${key}:`, ...rawItems.map((item) => `  - ${item}`));
+}
+
 export function quoteYaml(value: string): string {
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }

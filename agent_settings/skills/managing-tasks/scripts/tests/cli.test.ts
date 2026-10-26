@@ -143,6 +143,21 @@ describe("task lifecycle", () => {
     ]);
     assert.equal(cli(sandbox, ["redmine", "record", "ConvertJob", "--line", "bad line"]).json.error?.code, "invalid_value");
   });
+
+  test("tags are added and removed in place", () => {
+    const path = cli(sandbox, ["find", "ConvertJob"]).json.task.path;
+    assert.match(read(path), /\ntags:\nsubtask:/);
+    const added = cli(sandbox, ["tag", "ConvertJob", "--add", "#bug", "--add", "한강홍수통제소", "--add", "bug", "--date", DATE]);
+    assert.deepEqual(added.json.tags, ["bug", "한강홍수통제소"]);
+    assert.match(read(path), /\nredmine: 48213\ntags:\n {2}- bug\n {2}- 한강홍수통제소\nsubtask:/);
+    const removed = cli(sandbox, ["tag", "ConvertJob", "--remove", "bug", "--add", "support", "--date", DATE]);
+    assert.deepEqual([removed.json.added, removed.json.removed], [["support"], ["bug"]]);
+    assert.match(read(path), /\ntags:\n {2}- 한강홍수통제소\n {2}- support\nsubtask:/);
+    assert.equal(cli(sandbox, ["tag", "ConvertJob", "--add", "support"]).json.changed, false);
+    assert.equal(cli(sandbox, ["tag", "ConvertJob", "--add", "a b"]).json.error?.code, "invalid_value");
+    assert.equal(cli(sandbox, ["tag", "ConvertJob", "--add", "2026"]).json.error?.code, "invalid_value");
+    assert.equal(cli(sandbox, ["tag", "ConvertJob"]).json.error?.code, "usage");
+  });
 });
 
 describe("commits", () => {

@@ -5,7 +5,6 @@ end-date:
 task-id: "{YYYY}-000000"
 redmine:
 tags:
-  - task
 subtask:
 git-commit:
 priority: "{low/medium/high/critical}"

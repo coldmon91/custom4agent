@@ -18,6 +18,7 @@ import { touchSession } from "./commands/record-session.ts";
 import { addIssue, listIssues, recordIssueUpdates } from "./commands/redmine.ts";
 import { renameTask } from "./commands/rename.ts";
 import { addSubtask, completeSubtask } from "./commands/subtask.ts";
+import { editTags } from "./commands/tag.ts";
 import { findTask, summarize } from "./task-store.ts";
 
 const USAGE = `node tasks.mjs <command> [args] [options]   (all output is JSON)
@@ -39,6 +40,7 @@ const USAGE = `node tasks.mjs <command> [args] [options]   (all output is JSON)
   redmine list <task>
   redmine record <task> --line L...
   priority <task> <low|medium|high|critical>
+  tag <task> [--add T]... [--remove T]...
   session <task>                           record only the current agent session
 
 common: --agent claude|codex|pi|opencode   --date YYYY-MM-DD   --exact
@@ -51,6 +53,7 @@ const OPTIONS = {
   result: { type: "string", multiple: true }, "allow-pending": { type: "boolean" }, to: { type: "string" },
   item: { type: "string", multiple: true }, cause: { type: "string", multiple: true }, subtask: { type: "string" },
   current: { type: "string" }, remaining: { type: "string" }, blocked: { type: "string" },
+  add: { type: "string", multiple: true }, remove: { type: "string", multiple: true },
   repo: { type: "string" }, line: { type: "string", multiple: true }, help: { type: "boolean", short: "h" },
 } as const;
 
@@ -113,6 +116,8 @@ function run(args: string[]): Record<string, unknown> {
       }, options);
     case "priority":
       return setPriority(config, task(), need(rest[1], "<priority>"), options);
+    case "tag":
+      return editTags(config, { query: task(), add: values.add ?? [], remove: values.remove ?? [] }, options);
     case "session":
       return touchSession(config, task(), options);
     default:

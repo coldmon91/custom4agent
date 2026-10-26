@@ -62,12 +62,17 @@ Task 노트·Subtask 노트의 frontmatter, 폴더 이동, 이름, 로그, 진�
 | Redmine 갱신 | `tasks redmine list <task>`, `tasks redmine record <task> --line "…"...` |
 | 이름 변경 | `tasks rename <task> --to "<새 제목>"` |
 | 우선순위 | `tasks priority <task> <값>` |
+| 태그 | `tasks tag <task> [--add <태그>]... [--remove <태그>]...` |
 | 조회 | `tasks list [--status todo,in_progress\|all]` |
 
 - 사용자가 준 정보만 넘김. 목표·배경·우선순위를 추측하지 않음
 - 이름 없이 "그거", "끝났어"처럼 말하면 대화에서 직전에 다룬 Task
-- Task 노트를 바꾼 동작(생성 제외)은 마지막에 `progress`로 진행 상태를 갱신하고, Redmine 번호가 있으면 "Redmine 갱신 확인"도 실행
+- Task 노트를 바꾼 동작(생성·태그 제외)은 마지막에 `progress`로 진행 상태를 갱신하고, Redmine 번호가 있으면 "Redmine 갱신 확인"도 실행
 - `## 목표`·`## 배경` 본문을 사용자가 불러준 대로 고치는 것만 직접 편집. 그 외 frontmatter와 섹션은 손대지 않음
+
+**태그**
+- 접두어 없는 한 단어: 작업 유형(예: `bug`, `feature`, `improvement`, `support`, `ops`, `release`, `migration`), 제목·이슈에 나온 고객사 이름
+- 제목 접두어(컴포넌트)는 태그로 반복하지 않음. 근거가 없으면 붙이지 않음
 
 **생성**
 - 제목 없이 Redmine 번호만 주면 `redmine` skill로 이슈 제목을 조회해 사용

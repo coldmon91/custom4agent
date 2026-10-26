@@ -40,6 +40,7 @@ claude.ai 의 Gmail / Google Calendar / Google Drive / Google Chat MCP 커넥터
 | Chat space 목록 | `gws chat spaces list --params '{"pageSize": 100}'` |
 | Chat 최근 메시지 | `gws chat spaces messages list --params '{"parent": "spaces/<ID>", "pageSize": 20, "orderBy": "createTime desc"}'` |
 | Chat 기간 필터 | `"filter": "create_time > \"2026-09-29T00:00:00+09:00\""` 를 params 에 추가 |
+| Chat 메시지 전송 (사용자 확인 후) | `gws chat +send --space spaces/<ID> --text '<내용>'` (먼저 `--dry-run`) |
 | Drive 파일 검색 | `gws drive files list --params '{"q": "name contains \"회의록\"", "pageSize": 20}'` |
 | 시트 읽기 | `gws sheets +read --spreadsheet <ID> --range 'Sheet1!A1:D20'` |
 | 할 일 목록 | `gws tasks tasklists list` → `gws tasks tasks list --params '{"tasklist": "<ID>"}'` |
@@ -68,7 +69,7 @@ claude.ai 의 Gmail / Google Calendar / Google Drive / Google Chat MCP 커넥터
 
 - 메일은 가능하면 `gws gmail +send ... --draft` 로 초안을 먼저 만든다
 - raw API 쓰기는 `--dry-run` 으로 요청을 먼저 검증한다
-- scope 가 없는 작업 (예: Chat 메시지 전송, 필요 scope `chat.messages.create`) 은 바로 다른 수단으로 넘어가지 않는다.
+- scope 가 없는 작업 (예: Chat 메시지 수정·삭제, 필요 scope `chat.messages`) 은 바로 다른 수단으로 넘어가지 않는다.
   `gws` 권한 부족을 보고하고 두 선택지를 제시한다: (1) scope 추가 재로그인, (2) 해당 MCP 커넥터로 1회 처리
 
 ## 트러블슈팅
@@ -83,9 +84,9 @@ claude.ai 의 Gmail / Google Calendar / Google Drive / Google Chat MCP 커넥터
 **scope 추가 재로그인**
 - 브라우저 인증이 필요한 대화형 명령이므로 사용자가 `! gws auth login --scopes "..."` 로 직접 실행하게 안내한다
 - `--scopes` 는 기존 scope 를 **대체**한다. 현재 scope 전체 + 추가 scope 를 쉼표로 이어서 넘긴다 (빠뜨리면 기존 서비스가 막힘)
-- 현재 scope 목록 (2026-09-29 기준, 변경 전 `gws auth status` 로 재확인):
+- 현재 scope 목록 (2026-10-15 기준, 변경 전 `gws auth status` 로 재확인):
   ```
-  openid,email,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/presentations,https://www.googleapis.com/auth/spreadsheets,https://www.googleapis.com/auth/tasks,https://www.googleapis.com/auth/chat.spaces.readonly,https://www.googleapis.com/auth/chat.messages.readonly,https://www.googleapis.com/auth/chat.memberships.readonly
+  openid,email,profile,https://www.googleapis.com/auth/userinfo.email,https://www.googleapis.com/auth/userinfo.profile,https://www.googleapis.com/auth/calendar,https://www.googleapis.com/auth/cloud-platform,https://www.googleapis.com/auth/documents,https://www.googleapis.com/auth/drive,https://www.googleapis.com/auth/gmail.modify,https://www.googleapis.com/auth/presentations,https://www.googleapis.com/auth/pubsub,https://www.googleapis.com/auth/spreadsheets,https://www.googleapis.com/auth/tasks,https://www.googleapis.com/auth/chat.spaces.readonly,https://www.googleapis.com/auth/chat.messages.readonly,https://www.googleapis.com/auth/chat.memberships.readonly,https://www.googleapis.com/auth/chat.messages.create
   ```
 - 로그인 완료 후 토큰 캐시를 백업해야 새 scope 가 반영된다. 기존 백업을 덮어쓰지 않도록 시각을 붙인다
   ```bash

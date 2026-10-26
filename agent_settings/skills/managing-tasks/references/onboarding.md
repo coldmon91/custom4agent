@@ -29,5 +29,16 @@ tasks init --vault "<vault 경로>" [--tasks <폴더>] [--templates <폴더>] --
 
 - 단계별로 만든 것(`created`)과 건너뛴 것(`skipped`, `differs`)을 보고
 - Obsidian 설정 > 코어 플러그인 > Templates의 템플릿 폴더를 `templates` 값으로 지정하라고 안내. `.obsidian/` 설정 파일은 직접 고치지 않음
-- 커뮤니티 플러그인이 필요한 보기: "타임라인"(`tm-timeline`)은 Task Manager Bases View 플러그인, "칸반"(`kanban`)은 이 보기 형식을 등록하는 플러그인. 없으면 그 보기만 표시되지 않음. 안내만 하고 설치하지 않음
+- 아래 "필요한 플러그인" 상태를 확인해 안내
 - Obsidian에서 `Tasks.base`의 "할 일" 보기에 샘플이 보이는지 확인 요청. 필요 없으면 샘플 폴더째 삭제해도 됨
+
+## 필요한 플러그인
+
+- **Task Manager Bases View** (커뮤니티 플러그인, id `task-manager-bases-view`): `Tasks.base`의 "타임라인" 보기(`tm-timeline`)를 등록. 필수
+  - 설치에 더해 켜져 있어야 함. 꺼져 있으면 그 보기에서 "알 수 없는 뷰 유형으로 뷰가 설정됨 tm-timeline" 오류
+  - 데스크톱 전용, Obsidian 1.10.2 이상
+  - 상태 확인은 읽기만: `.obsidian/plugins/task-manager-bases-view/`가 없으면 미설치, 있어도 `.obsidian/community-plugins.json` 목록에 id가 없으면 꺼짐
+  - 미설치·꺼짐이면 설정 > 커뮤니티 플러그인에서 설치·켜기를 안내. 제한 모드가 켜져 있으면 먼저 끄도록 안내
+- "칸반"(`kanban`) 보기는 이 보기 형식을 등록하는 플러그인이 필요. 없으면 그 보기만 표시되지 않음
+- 설치·켜기는 사용자가 직접 함. `.obsidian/` 파일은 고치지 않음
+- 사용자가 위 오류를 보고하면 init 전체를 다시 하지 않고 이 절만 확인

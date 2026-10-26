@@ -2,7 +2,7 @@
 name: review-small
 description: Reviews a small or mechanical diff — renames, config edits, dependency bumps, straightforward refactors, single-function changes. Read-only; it never edits files. Use for a diff under roughly 200 lines whose intent is obvious. Do NOT use for a diff touching concurrency, security, or a public interface (use review-complex).
 model: sonnet
-effort: low
+effort: medium
 disallowedTools: [Edit, Write, NotebookEdit]
 ---
 

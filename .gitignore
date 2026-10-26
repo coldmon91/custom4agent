@@ -18,6 +18,9 @@ pi-agent/recent-models.json
 pi-agent/models-store.json
 pi-agent/favorite-models.json
 pi-agent/codex-usage.json
+pi-agent/install
+pi-agent/bin
+pi-agent/mcp.json
 
 # etc
 agent_settings/skills/my-*
