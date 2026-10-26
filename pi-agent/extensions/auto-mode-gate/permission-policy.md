@@ -35,7 +35,19 @@ Read 모드의 활성 툴 목록과 Write 모드의 동작은 이 설정과 별�
   `null`은 인자 없이 remote 목록을 조회하는 경우.
 - `npmReadOnly`: 허용된 조회용 npm 하위 명령.
 
-`cd`, `command -v`, 조회용 `sed`, 업로드·인증·파일 출력 없는 `curl`의 조건부 처리는 코드에 유지.
+다음 조건부 처리는 코드에 유지.
+
+- `cd`, `command -v`, `--version`·`--help` 단독 조회.
+- `bash -c '...'`·`sh -c '...'`·quoted heredoc 스크립트: 스크립트 내용을 같은 기준으로 재심사.
+- `$(...)` 내부 명령: 읽기 전용일 때만 허용. backtick, `$((...))` 산술 확장은 AI 심사.
+- `find -exec`·`fd -x`: 실행 명령을 따로 심사하며 읽기 전용만 허용.
+- `curl`: 허용 목록 옵션만 쓰는 HTTP(S) GET·HEAD. `-o` 출력은 신뢰 디렉터리 안일 때만 허용.
+- 목록 항목의 형태 제한: `git branch`·`tag`·`stash`·`config`·`reflog`·`worktree`·`symbolic-ref`는 조회 형태만,
+  `plutil -p`·`-lint`, `defaults read`·`domains`·`find`, 환경변수 출력 옵션 없는 `ps`,
+  인자 없는 `set`·`export`·`env` 제외, `ln`은 `-s`만, `sed`·`gofmt`는 `-i`·`-w`일 때만 쓰기로 취급.
+- 쓰기 제외 경로: `.git` 내부, 셸 PATH 디렉터리(pi가 앞에 붙이는 `~/.pi/agent/bin` 포함).
+  해당 경로에 쓴 파일은 자동 승인되는 `git`·일반 명령이 나중에 실행할 수 있기 때문.
+
 셸 문법, 실행 래퍼 해석, 위험 인자 정규식, 민감 경로 검사도 코드에 유지.
 설정은 실제 읽기 전용 동작이나 경로 제약을 보장하지 않으므로, `orca`·스크립트 실행기 등을 통째로 조회 목록에 등록하면 안전 검사가 우회될 수 있음.
 

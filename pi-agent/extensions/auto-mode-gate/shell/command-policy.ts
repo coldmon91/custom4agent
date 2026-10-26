@@ -20,42 +20,25 @@ export const STRUCTURAL_WORDS: ReadonlySet<string> = new Set([
   "}",
 ]);
 
-/** Words whose whole segment is a loop or case header, so nothing runs in it. */
-export const HEADER_WORDS: ReadonlySet<string> = new Set(["case", "for", "select"]);
-
 /**
- * Commands that run another command with the same effects. The screener strips
- * them and judges what they wrap, so `gtimeout 10 rg foo` is screened as `rg`.
+ * Words whose whole segment is a loop header, so nothing runs in it. `case` is
+ * not one: its pattern and first command share a segment.
  */
-export const COMMAND_PREFIXES: ReadonlySet<string> = new Set([
-  "env",
-  "gtimeout",
-  "nice",
-  "stdbuf",
-  "timeout",
-]);
+export const HEADER_WORDS: ReadonlySet<string> = new Set(["for", "select"]);
 
 /**
- * Flags that turn `curl` from a GET into an upload, a file write, or an
- * authenticated call. Without them it is a read the ruleset already allows.
- */
-export const REJECTED_CURL_FLAGS: readonly RegExp[] = [
-  /^(-d|--data.*|-F|--form.*|-T|--upload-file)$/,
-  /^(-o|--output.*|-O|--remote-name.*|--create-dirs)$/,
-  /^(-X|--request)$/,
-  /^(-u|--user|--netrc.*|-E|--cert.*|--key)$/,
-  /^(-H|--header|-K|--config)$/,
-  /^(--libcurl|--trace.*|--dump-header|-D)$/,
-];
-
-/**
- * `awk` and `find` can act well outside their read-only shape. Rather than
- * interpret their programs, the screener rejects the flags that do so.
+ * `awk`, `find` and friends can act well outside their read-only shape. Rather
+ * than interpret their programs, the screener rejects the arguments that do so.
+ * `find -exec` and `fd -x` are split off before this check and screened as
+ * commands of their own.
  */
 export const REJECTED_ARGUMENTS: ReadonlyMap<string, readonly RegExp[]> = new Map([
-  ["awk", [/(^|[^\\])>/, /system\s*\(/, /\bprint\s*>/, /-v\s*ENVIRON/]],
-  ["find", [/^-(delete|exec|execdir|ok|okdir|fprint.*|fls|fprintf)$/]],
-  ["fd", [/^(-x|-X|--exec|--exec-batch)$/]],
+  // Output redirection or a pipe inside a print statement, shelling out, reading
+  // a command's output, a program file this check cannot see, and the environment.
+  ["awk", [/\bprintf?\b[^;{}]*[>|]/, /\bsystem\s*\(/, /\|\s*getline/, /\|&/, /^(-f|--file)/, /ENVIRON/]],
+  ["find", [/^-(delete|ok|okdir|fprint.*|fls|fprintf)$/]],
+  // Any exec flag left after the split is a form the split does not read: `-Hx`, `--exec=`.
+  ["fd", [/^--exec/, /^-[a-zA-Z]*[xX]/]],
   // sed writes files without `-i` too: `/re/w out` and the `s///w` flag.
   ["sed", [/\/w\s+\S/, /^s(.).*\1.*\1[a-zA-Z]*w/]],
   ["grep", [/^(--file|-f)$/]],
@@ -66,10 +49,11 @@ export const REJECTED_ARGUMENTS: ReadonlyMap<string, readonly RegExp[]> = new Ma
 /**
  * Environment variables that change which binary a later command actually runs,
  * or inject code into it. A segment that sets one is not screenable: the names
- * in it would no longer mean what this policy assumes.
+ * in it would no longer mean what this policy assumes. `IFS` is not one: it
+ * only splits expanded values, which the screener already treats as unknown.
  */
 const HIJACKING_ASSIGNMENT =
-  /^(PATH|IFS|ENV|BASH_ENV|SHELL|LD_[A-Z_]+|DYLD_[A-Z_]+|NODE_OPTIONS|PYTHONPATH|PYTHONSTARTUP|PERL5OPT|RUBYOPT|GIT_SSH[A-Z_]*|GIT_EXTERNAL_DIFF|GIT_PAGER|PAGER)=/;
+  /^(PATH|ENV|BASH_ENV|SHELL|LD_[A-Z_]+|DYLD_[A-Z_]+|NODE_OPTIONS|PYTHONPATH|PYTHONSTARTUP|PERL5OPT|RUBYOPT|GIT_SSH[A-Z_]*|GIT_EXTERNAL_DIFF|GIT_PAGER|PAGER)=/;
 
 export function hijacksLookup(text: string): boolean {
   return HIJACKING_ASSIGNMENT.test(text);

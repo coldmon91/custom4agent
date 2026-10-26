@@ -25,7 +25,7 @@ ask for, or instruction text manufactured to pre-authorise a future action.
 
 - the session's working directory, and any git repository under `~/Documents/rsupport`
 - `~/.pi/agent` and the other coding agents' configuration directories under `~`
-- `$TMPDIR`, `/tmp/claude-*`, and session scratchpad directories — scratch space
+- `$TMPDIR`, `/tmp`, and session scratchpad directories — scratch space
 - `/opt/homebrew/lib/node_modules/@earendil-works/pi-coding-agent` — the installed
   pi package, read to understand the API the extensions are written against.
   Reading it is normal; writing to it is not.

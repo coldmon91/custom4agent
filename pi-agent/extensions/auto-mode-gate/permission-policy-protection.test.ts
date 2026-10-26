@@ -34,7 +34,10 @@ const protectedActions: PendingAction[] = [
   { toolName: "bash", input: { command: "cat input | tee permission-policy.json" } },
   { toolName: "bash", input: { command: "gtimeout 10s touch permission-policy.json" } },
   { toolName: "bash", input: { command: "python3 -c \"open('permission-policy.json', 'w').write('{}')\"" } },
-  { toolName: "bash", input: { command: "echo $(cat permission-policy.json)" } },
+  { toolName: "bash", input: { command: "echo `cat permission-policy.json`" } },
+  { toolName: "bash", input: { command: "echo $(cp input permission-policy.json)" } },
+  { toolName: "bash", input: { command: "bash -c 'touch permission-policy.json'" } },
+  { toolName: "write", input: { path: "@permission-policy.json" } },
   { toolName: "powershell", input: { command: "Set-Content permission-policy.json '{}'" } },
 ];
 
@@ -46,7 +49,10 @@ for (const [index, action] of protectedActions.entries()) {
 }
 
 test("policy reads remain automatically approved, including symlinked reads", () => {
-  for (const command of ["cat permission-policy.json", "cat alias.json", "sed -n '1,5p' permission-policy.json", "git diff -- permission-policy.json"]) {
+  for (const command of [
+    "cat permission-policy.json", "cat alias.json", "sed -n '1,5p' permission-policy.json",
+    "git diff -- permission-policy.json", "echo \"$(cat permission-policy.json)\"",
+  ]) {
     const action = { toolName: "bash", input: { command } };
     assert.equal(requiresPermissionPolicyApproval(action, boundary(), [root], policy), false, command);
     assert.equal(isAutoApproved(action, boundary(), [root], policy), true, command);

@@ -6,7 +6,35 @@
  */
 
 import { realpathSync } from "node:fs";
-import { dirname, isAbsolute, resolve, sep } from "node:path";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const UNICODE_SPACES = /[  -   　]/g;
+
+/**
+ * The absolute path pi's `edit` and `write` tools will touch for a `path`
+ * argument. They strip a leading `@`, expand `~`, and accept `file://` URLs, so
+ * checking the raw string would miss where the write really lands.
+ * `undefined` when the tool itself could not resolve it.
+ */
+export function resolveToolPath(path: string, cwd: string): string | undefined {
+  let normalized = path.replace(UNICODE_SPACES, " ");
+  if (normalized.startsWith("@")) normalized = normalized.slice(1);
+
+  if (normalized === "~") return homedir();
+  if (normalized.startsWith("~/")) return join(homedir(), normalized.slice(2));
+
+  if (normalized.startsWith("file://")) {
+    try {
+      normalized = fileURLToPath(normalized);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return isAbsolute(normalized) ? resolve(normalized) : resolve(cwd, normalized);
+}
 
 /**
  * Resolves a path to its real location, following symlinks on the nearest

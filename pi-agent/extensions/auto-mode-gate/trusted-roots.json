@@ -6,10 +6,12 @@
     "Entries must be absolute; '~/...' and '$TMPDIR' are expanded, nothing else is.",
     "Symlinks are resolved before the check, so a link out of a root does not widen it.",
     "Files that look like credentials (auth.json, .env, id_rsa, .ssh/…) are screened",
-    "wherever they live — a root does not cover them."
+    "wherever they live — a root does not cover them. So are writes into a .git directory",
+    "or a directory on the shell PATH, where a file becomes code that later commands run."
   ],
   "roots": [
     "~/.pi/agent",
-    "$TMPDIR"
+    "$TMPDIR",
+    "/tmp"
   ]
 }

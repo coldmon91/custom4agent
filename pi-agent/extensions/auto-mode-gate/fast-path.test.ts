@@ -68,6 +68,28 @@ test("writes that escape the working directory are classified", () => {
   assert.equal(check("write", { path: "escape/new.txt" }), false, "new file through a symlink");
 });
 
+test("tool paths are judged where the tool really writes them", () => {
+  assert.equal(check("write", { path: "~/.zshrc" }), false, "tilde is the home directory");
+  assert.equal(check("write", { path: "@/etc/hosts" }), false, "the tool strips a leading @");
+  assert.equal(check("write", { path: "file:///etc/hosts" }), false, "the tool accepts file URLs");
+  assert.equal(check("write", { path: "@sub/new.txt" }), true, "@ inside the directory");
+});
+
+test("writes that would plant code a screened command later runs are classified", () => {
+  mkdirSync(join(boundary.cwd, ".git"), { recursive: true });
+  assert.equal(check("write", { path: ".git/config" }), false);
+  assert.equal(check("edit", { path: ".git/hooks/pre-commit" }), false);
+
+  const previous = process.env.PATH;
+  process.env.PATH = `${join(boundary.cwd, "bin")}:${previous}`;
+  try {
+    assert.equal(check("write", { path: "bin/cat" }), false, "a file in a PATH directory");
+    assert.equal(check("write", { path: "sub/cat" }), true);
+  } finally {
+    process.env.PATH = previous;
+  }
+});
+
 test("a call with no usable path is not auto-approved", () => {
   assert.equal(check("write", {}), false, "missing path");
   assert.equal(check("write", { path: "" }), false, "empty path");

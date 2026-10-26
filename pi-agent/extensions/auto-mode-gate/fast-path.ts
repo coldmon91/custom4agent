@@ -7,10 +7,11 @@
  * `shell/screen.ts`. Everything else falls through to the classifier.
  */
 
-import { isInsideAnyRoot } from "./paths.ts";
+import { isInsideAnyRoot, resolveToolPath } from "./paths.ts";
 import { isAutoApprovedShellCommand, isReadOnlyShellCommand } from "./shell/screen.ts";
 import { getPermissionPolicy, type PermissionPolicy } from "./permission-policy.ts";
 import { referencesPermissionPolicy } from "./permission-policy-protection.ts";
+import { isProtectedWritePath } from "./protected-paths.ts";
 import { looksSensitive } from "./shell/command-policy.ts";
 import { getTrustedRoots } from "./trusted-roots.ts";
 import type { PendingAction, TrustBoundary } from "./types.ts";
@@ -20,9 +21,10 @@ export function trustedRootsFor(boundary: TrustBoundary): string[] {
   return [boundary.cwd, ...getTrustedRoots().directories];
 }
 
-function targetPath(action: PendingAction): string | undefined {
+/** The absolute path the tool will write, resolved the way the tool resolves it. */
+function targetPath(action: PendingAction, cwd: string): string | undefined {
   const path = action.input.path;
-  return typeof path === "string" && path.length > 0 ? path : undefined;
+  return typeof path === "string" && path.length > 0 ? resolveToolPath(path, cwd) : undefined;
 }
 
 function shellCommand(action: PendingAction): string | undefined {
@@ -48,9 +50,9 @@ export function isAutoApproved(
   if (requiresPermissionPolicyApproval(action, boundary, roots, policy)) return false;
 
   if (policy.tools.inRootWrite.has(action.toolName)) {
-    const path = targetPath(action);
+    const path = targetPath(action, boundary.cwd);
     // A malformed call has no path to vet, so let the classifier see it.
-    if (path === undefined || looksSensitive(path)) return false;
+    if (path === undefined || looksSensitive(path) || isProtectedWritePath(path, boundary.cwd)) return false;
     return isInsideAnyRoot(path, roots, boundary.cwd);
   }
 
