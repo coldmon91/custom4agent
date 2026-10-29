@@ -21,7 +21,7 @@ describe("init", () => {
   after(() => sandbox.cleanup());
 
   test("creates folders, template copies, base and the sample task", () => {
-    for (const status of ["todo", "in_progress", "done"]) assert.ok(existsSync(join(sandbox.tasksDir, "2026", status)));
+    for (const status of ["todo", "in_progress", "done", "archived"]) assert.ok(existsSync(join(sandbox.tasksDir, "2026", status)));
     assert.ok(existsSync(join(sandbox.vault, "Templates", "task.md")));
     assert.ok(existsSync(join(sandbox.tasksDir, "Tasks.base")));
     const sample = read(join(sandbox.tasksDir, "2026", "todo", "sample - 첫 Task", "sample - 첫 Task.md"));
@@ -157,6 +157,50 @@ describe("task lifecycle", () => {
     assert.equal(cli(sandbox, ["tag", "ConvertJob", "--add", "a b"]).json.error?.code, "invalid_value");
     assert.equal(cli(sandbox, ["tag", "ConvertJob", "--add", "2026"]).json.error?.code, "invalid_value");
     assert.equal(cli(sandbox, ["tag", "ConvertJob"]).json.error?.code, "usage");
+  });
+});
+
+describe("archiving", () => {
+  let sandbox: Sandbox;
+  before(() => {
+    sandbox = initSandbox();
+    cli(sandbox, ["create", "--title", "session 보류 작업", "--date", DATE]);
+    cli(sandbox, ["subtask", "add", "보류", "남은 일", "--date", DATE]);
+  });
+  after(() => sandbox.cleanup());
+
+  test("archive skips completion checks, keeps started empty and sets end-date", () => {
+    const result = cli(sandbox, ["move", "보류", "archived", "--date", "2026-10-20"]);
+    assert.equal(result.json.ok, true, JSON.stringify(result.json));
+    assert.match(result.json.task.path, /[\\/]archived[\\/]/);
+    assert.match(read(result.json.task.path), /status: archived\nstarted:\nend-date: 2026-10-20\n/);
+  });
+
+  test("archived tasks are left out of the default list", () => {
+    const names = (rows: { name: string }[]) => rows.map((row) => row.name);
+    assert.ok(!names(cli(sandbox, ["list"]).json.tasks).includes("session 보류 작업"));
+    assert.ok(names(cli(sandbox, ["list", "--status", "archived"]).json.tasks).includes("session 보류 작업"));
+  });
+
+  test("restoring to in_progress starts the task and clears end-date", () => {
+    const result = cli(sandbox, ["move", "보류", "in_progress", "--date", "2026-10-21"]);
+    assert.match(read(result.json.task.path), /status: in_progress\nstarted: 2026-10-21\nend-date:\n/);
+  });
+});
+
+describe("unmanaged entries", () => {
+  let sandbox: Sandbox;
+  before(() => {
+    sandbox = initSandbox();
+    writeFileSync(join(sandbox.tasksDir, "루트 노트.md"), "---\nstatus: todo\n---\n");
+    mkdirSync(join(sandbox.tasksDir, "2026", "hold", "보류 폴더"), { recursive: true });
+    writeFileSync(join(sandbox.tasksDir, "2026", "연도 아래 노트.md"), "");
+  });
+  after(() => sandbox.cleanup());
+
+  test("list reports notes and folders outside <YYYY>/<status>/ for any status filter", () => {
+    const unmanaged = (cli(sandbox, ["list"]).json.unmanaged as string[]).map((path) => path.slice(sandbox.tasksDir.length + 1).replaceAll("\\", "/"));
+    assert.deepEqual(unmanaged.sort(), ["2026/hold", "2026/연도 아래 노트.md", "루트 노트.md"].sort());
   });
 });
 

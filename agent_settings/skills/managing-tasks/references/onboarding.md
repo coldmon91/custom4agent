@@ -1,44 +1,43 @@
-# Onboarding — managing-tasks 처음 설정
+# Onboarding — First-time setup
 
-설정 파일(`~/.config/managing-tasks/setting.json`)이 없거나 vault에 Task 구조가 없을 때, 또는 사용자가 처음 설정을 요청할 때 진행.
-`tasks`는 SKILL.md "스크립트"의 명령 줄임.
+Run when the config file (`~/.config/managing-tasks/setting.json`) is missing, the vault has no Task structure, or the user asks for setup. `tasks` is shorthand for the command in "Script" of SKILL.md.
 
-## 1. vault 경로
+## 1. Vault path
 
-- `tasks config`가 성공하면 현재 설정을 보여줌. 사용자가 다른 vault를 말했으면 바꾸기 전에 확인
-- 설정 파일이 없으면 vault 경로를 사용자에게 물음. 추측하지 않음
-- `tasks`·`templates` 폴더 이름은 기본값 `Tasks`, `Templates`. 사용자가 다른 이름을 말했을 때만 옵션으로 넘김
+- If `tasks config` succeeds, show the current setting. If the user named a different vault, confirm before changing it
+- No config file → ask for the vault path. Do not guess
+- Folder names default to `Tasks` and `Templates`. Pass them as options only when the user named others
 
-## 2. 실행
+## 2. Run
 
 ```bash
-tasks init --vault "<vault 경로>" [--tasks <폴더>] [--templates <폴더>] --agent claude
+tasks init --vault "<vault path>" [--tasks <folder>] [--templates <folder>] --agent claude
 ```
 
-설정이 이미 있으면 `--vault` 없이 실행. 대상이 있으면 건너뛰고, 기존 파일은 덮어쓰지 않음.
-`steps`의 단계: 설정 파일 → 올해 상태 폴더와 템플릿 폴더 → 템플릿 사본(`task.md`, `subtask.md`) → `Tasks.base`(Task 목록 표·타임라인·칸반 보기) → 샘플 Task `sample - 첫 Task`(task-id `1900-000001` 고정).
+If the config exists, run without `--vault`. Existing targets are skipped, and existing files are never overwritten.
+Stages in `steps`: config file → this year's status folders and templates folder → template copies (`task.md`, `subtask.md`) → `Tasks.base` (Task list table, timeline, kanban views) → sample Task `sample - 첫 Task` (task-id fixed to `1900-000001`).
 
-| 결과 | 대응 |
+| Result | Response |
 |---|---|
-| `vault_missing`, `not_obsidian_vault` (`.obsidian/` 없음) | 멈추고 vault 경로를 다시 확인 |
-| `conflict` (설정이 다른 vault를 가리킴) | 현재 값을 보여주고, 사용자가 바꾸기로 하면 `setting.json`의 `vault`만 고친 뒤 `--vault` 없이 재실행 |
-| `config_missing` | `--vault` 누락. 1단계로 |
-| 단계 `outcome: differs` | 기존 파일이 skill 원본(`references/`)과 다름. 두 파일을 읽어 차이를 보여주고, 덮어쓰지 않음 |
+| `vault_missing`, `not_obsidian_vault` (no `.obsidian/`) | Stop and recheck the vault path |
+| `conflict` (config points to another vault) | Show the current value. If the user wants to change it, fix only `vault` in `setting.json`, then rerun without `--vault` |
+| `config_missing` | `--vault` was omitted. Go to step 1 |
+| Stage `outcome: differs` | The file differs from the skill original (`references/`). Read both, show the difference, do not overwrite |
 
-## 3. 안내
+## 3. Guidance
 
-- 단계별로 만든 것(`created`)과 건너뛴 것(`skipped`, `differs`)을 보고
-- Obsidian 설정 > 코어 플러그인 > Templates의 템플릿 폴더를 `templates` 값으로 지정하라고 안내. `.obsidian/` 설정 파일은 직접 고치지 않음
-- 아래 "필요한 플러그인" 상태를 확인해 안내
-- Obsidian에서 `Tasks.base`의 "할 일" 보기에 샘플이 보이는지 확인 요청. 필요 없으면 샘플 폴더째 삭제해도 됨
+- Report per stage: `created`, and `skipped` or `differs`
+- Tell the user to set Obsidian Settings > Core plugins > Templates folder to the `templates` value. Do not edit `.obsidian/` config files
+- Check "Required plugins" below and guide the user
+- Ask the user to confirm the sample shows in the "할 일" (To do) view of `Tasks.base`. If not needed, the sample folder can be deleted
 
-## 필요한 플러그인
+## Required plugins
 
-- **Task Manager Bases View** (커뮤니티 플러그인, id `task-manager-bases-view`): `Tasks.base`의 "타임라인" 보기(`tm-timeline`)를 등록. 필수
-  - 설치에 더해 켜져 있어야 함. 꺼져 있으면 그 보기에서 "알 수 없는 뷰 유형으로 뷰가 설정됨 tm-timeline" 오류
-  - 데스크톱 전용, Obsidian 1.10.2 이상
-  - 상태 확인은 읽기만: `.obsidian/plugins/task-manager-bases-view/`가 없으면 미설치, 있어도 `.obsidian/community-plugins.json` 목록에 id가 없으면 꺼짐
-  - 미설치·꺼짐이면 설정 > 커뮤니티 플러그인에서 설치·켜기를 안내. 제한 모드가 켜져 있으면 먼저 끄도록 안내
-- "칸반"(`kanban`) 보기는 이 보기 형식을 등록하는 플러그인이 필요. 없으면 그 보기만 표시되지 않음
-- 설치·켜기는 사용자가 직접 함. `.obsidian/` 파일은 고치지 않음
-- 사용자가 위 오류를 보고하면 init 전체를 다시 하지 않고 이 절만 확인
+- **Task Manager Bases View** (community plugin, id `task-manager-bases-view`): registers the "타임라인" (timeline) view (`tm-timeline`) of `Tasks.base`. Required
+  - Must be enabled, not just installed. When disabled, that view shows "알 수 없는 뷰 유형으로 뷰가 설정됨 tm-timeline" (view set to unknown type tm-timeline)
+  - Desktop only, Obsidian 1.10.2 or later
+  - Read-only check: if `.obsidian/plugins/task-manager-bases-view/` is missing, not installed. If present but the id is absent from `.obsidian/community-plugins.json`, disabled
+  - Not installed or disabled → guide install/enable in Settings > Community plugins. If Restricted mode is on, turn it off first
+- The "칸반" (kanban) view (`kanban`) needs a plugin that registers that view type. Without it, only that view is missing
+- The user installs and enables plugins. Do not edit `.obsidian/` files
+- For the error above, check only this section, not the whole init

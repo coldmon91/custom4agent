@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Config } from "../config.ts";
 import { getList, getScalar } from "../frontmatter.ts";
-import { listTasks, type TaskRef, type TaskStatus } from "../task-store.ts";
+import { listTasks, listUnmanaged, type TaskRef, type TaskStatus } from "../task-store.ts";
 import { parseText } from "../text-file.ts";
 import { subtaskName } from "./subtask.ts";
 
@@ -31,7 +31,7 @@ function taskRow(ref: TaskRef): Record<string, unknown> {
   };
 }
 
-/** Read-only listing; never modifies notes. */
+/** Read-only listing; never modifies notes. `unmanaged` is reported regardless of the status filter. */
 export function listTaskRows(config: Config, statuses: readonly TaskStatus[]): Record<string, unknown> {
-  return { tasks: listTasks(config, statuses).map(taskRow) };
+  return { tasks: listTasks(config, statuses).map(taskRow), unmanaged: listUnmanaged(config) };
 }

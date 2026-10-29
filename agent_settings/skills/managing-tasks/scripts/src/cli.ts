@@ -25,10 +25,10 @@ const USAGE = `node tasks.mjs <command> [args] [options]   (all output is JSON)
 
   config                                   show settings and resolved paths
   init [--vault P] [--tasks D] [--templates D]   onboarding: settings, folders, templates, base, sample
-  list [--status todo,in_progress|all]     tasks with fields and subtask progress
+  list [--status todo,archived,...|all]    tasks with fields and subtask progress, plus unmanaged entries
   find <task>                              resolve a task (name substring, --exact name, or task-id)
   create --title T [--redmine N] [--priority P]
-  move <task> <todo|in_progress|done> [--result L]... [--allow-pending]
+  move <task> <todo|in_progress|done|archived> [--result L]... [--allow-pending]
   rename <task> --to T
   log <task> [--item L]... [--cause L]... [--subtask S]
   progress <task> --current L [--remaining L] [--blocked L]

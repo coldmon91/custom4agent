@@ -6,7 +6,7 @@ import { ensureDir, moveNoOverwrite } from "../file-ops.ts";
 import { getList, getScalar, setScalar } from "../frontmatter.ts";
 import { openCheckboxes, replaceResult } from "../note-body.ts";
 import { describe, openTask, saveTask, type CommonOptions } from "../task-context.ts";
-import { findTask, statusDir, STATUSES, type TaskRef, type TaskStatus } from "../task-store.ts";
+import { findTask, statusDir, type TaskRef, type TaskStatus } from "../task-store.ts";
 import { parseText } from "../text-file.ts";
 import { subtaskName } from "./subtask.ts";
 
@@ -27,6 +27,22 @@ function pendingItems(ref: TaskRef, lines: string[]): string[] {
     if (status !== "done") pending.push(`subtask: ${name} (${status ?? "no status"})`);
   }
   return [...pending, ...openCheckboxes(lines)];
+}
+
+/** Dates follow the target state, so any move (including out of archived) leaves them consistent. */
+function applyStatusDates(lines: string[], to: TaskStatus, date: string): void {
+  if (to === "archived") {
+    // Keeps started as is: an archived task may never have begun.
+    setScalar(lines, "end-date", date);
+    return;
+  }
+  if (to === "todo") {
+    setScalar(lines, "started", "");
+    setScalar(lines, "end-date", "");
+    return;
+  }
+  if (!getScalar(lines, "started")) setScalar(lines, "started", date);
+  setScalar(lines, "end-date", to === "done" ? date : "");
 }
 
 function moveEntry(ref: TaskRef, config: Config, to: TaskStatus): string {
@@ -55,7 +71,6 @@ export function moveTask(config: Config, input: MoveInput, options: CommonOption
   const task = openTask(config, input.query, options);
   const { ref, doc } = task;
   const from = ref.status;
-  const forward = STATUSES.indexOf(input.to) > STATUSES.indexOf(from);
 
   if (input.to === "done") {
     const pending = input.allowPending ? [] : pendingItems(ref, doc.lines);
@@ -66,17 +81,8 @@ export function moveTask(config: Config, input: MoveInput, options: CommonOption
   }
 
   setScalar(doc.lines, "status", input.to);
-  if (forward) {
-    if (!getScalar(doc.lines, "started")) setScalar(doc.lines, "started", options.date);
-    if (input.to === "done") {
-      setScalar(doc.lines, "end-date", options.date);
-      replaceResult(doc.lines, input.result!);
-    }
-  } else {
-    // Moving back undoes the dates the later state filled in.
-    setScalar(doc.lines, "end-date", "");
-    if (input.to === "todo") setScalar(doc.lines, "started", "");
-  }
+  applyStatusDates(doc.lines, input.to, options.date);
+  if (input.to === "done") replaceResult(doc.lines, input.result!);
 
   // Move first so a locked folder leaves the note untouched; restore the folder if the write fails.
   const originalEntry = ref.entryPath;

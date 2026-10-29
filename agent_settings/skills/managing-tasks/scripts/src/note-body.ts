@@ -27,7 +27,7 @@ export function setTitleHeading(lines: string[], title: string): void {
   lines[heading.index] = `# ${title}`;
 }
 
-/** Index of a `##` section, created before `## 결과` (or at the end) when missing. */
+/** Returns the index of a `##` section, creating it before `## 결과` (or at the end) when missing. */
 function ensureSection(lines: string[], title: string): number {
   const existing = findHeading(lines, 2, title);
   if (existing) return existing.index;

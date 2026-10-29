@@ -13,7 +13,6 @@ Load the matching skill before editing, alongside these rules.
 - Go (`.go`, `go.mod`) -> `lang-go`
 - Rust (`.rs`, `Cargo.toml`) -> `lang-rust`
 - Swift (`.swift`, Swift package) -> `lang-swift`
-- Flutter/Dart (`.dart`, `pubspec.yaml`) -> `lang-flutter`
 
 ## Before Modifying Code
 

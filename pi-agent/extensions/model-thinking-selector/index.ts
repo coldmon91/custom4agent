@@ -21,7 +21,7 @@ import { withSelectorDiagnostics, writeSelectorDiagnostic } from "./model-select
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 const MAX_VISIBLE_MODELS = 10;
 const MAX_RECENT_MODELS = 5;
-const MAX_FAVORITE_MODELS = 5;
+const MAX_FAVORITE_MODELS = 10;
 const SELECTOR_LOG_DIR = join(homedir(), ".pi", "log");
 type ThinkingLevel = ModelThinkingLevel;
 

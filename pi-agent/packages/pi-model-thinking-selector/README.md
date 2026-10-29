@@ -67,7 +67,7 @@ Optional. Create `~/.pi/agent/model-thinking-selector.json`:
   "persistThinkingLevel": true,
   "selectorShortcut": "alt+p",
   "cycleThinkingShortcut": "ctrl+shift+t",
-  "maxFavoriteModels": 5,
+  "maxFavoriteModels": 10,
   "maxRecentModels": 5,
   "maxVisibleModels": 10
 }
@@ -79,7 +79,7 @@ Optional. Create `~/.pi/agent/model-thinking-selector.json`:
 | `persistThinkingLevel` | `true` | Write the picked effort to `settings.json` under `modelThinkingLevels` |
 | `selectorShortcut` | `"alt+p"` | Key that opens the picker |
 | `cycleThinkingShortcut` | `"ctrl+shift+t"` | Key that cycles effort |
-| `maxFavoriteModels` | `5` | Favorite slots (1 ~ 20) |
+| `maxFavoriteModels` | `10` | Favorite slots (1 ~ 20) |
 | `maxRecentModels` | `5` | Recent slots (1 ~ 20) |
 | `maxVisibleModels` | `10` | Rows shown at once (1 ~ 50) |
 

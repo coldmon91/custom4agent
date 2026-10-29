@@ -8,7 +8,7 @@ import { getScalar, hasFrontmatter } from "./frontmatter.ts";
 import { containsName, nfc, sameName } from "./names.ts";
 import { parseText } from "./text-file.ts";
 
-export const STATUSES = ["todo", "in_progress", "done"] as const;
+export const STATUSES = ["todo", "in_progress", "done", "archived"] as const;
 export type TaskStatus = (typeof STATUSES)[number];
 
 const YEAR = /^\d{4}$/;
@@ -73,6 +73,31 @@ export function listTasks(config: Config, statuses: readonly TaskStatus[] = STAT
   return result;
 }
 
+function isTaskCandidate(path: string): boolean {
+  return statSync(path).isDirectory() || path.toLowerCase().endsWith(".md");
+}
+
+/**
+ * Notes and folders outside <YYYY>/<status>/ that listTasks cannot see, such as a note
+ * dropped at the Tasks root or a folder under an unknown status name.
+ */
+export function listUnmanaged(config: Config): string[] {
+  const result: string[] = [];
+  for (const entry of listDirNames(config.tasksDir).sort()) {
+    const path = join(config.tasksDir, entry);
+    if (path === config.templatesDir || !isTaskCandidate(path)) continue;
+    if (!YEAR.test(entry) || !statSync(path).isDirectory()) {
+      result.push(path);
+      continue;
+    }
+    for (const child of listDirNames(path).sort()) {
+      const childPath = join(path, child);
+      if (!isStatus(child) && isTaskCandidate(childPath)) result.push(childPath);
+    }
+  }
+  return result;
+}
+
 export function readTaskId(ref: TaskRef): string | undefined {
   if (ref.legacy || !ref.notePath) return undefined;
   return getScalar(parseText(readFileSync(ref.notePath, "utf8")).lines, "task-id") || undefined;
@@ -92,7 +117,7 @@ export function findTask(config: Config, query: string, options: FindOptions = {
 
   if (matches.length === 1) return matches[0];
   if (matches.length === 0) {
-    const active = all.filter((ref) => ref.status !== "done");
+    const active = all.filter((ref) => ref.status === "todo" || ref.status === "in_progress");
     throw new TaskError("not_found", `no task matches "${query}"`, { query, candidates: active.map(summarize) });
   }
   throw new TaskError("ambiguous", `${matches.length} tasks match "${query}"`, { query, candidates: matches.map(summarize) });

@@ -22,6 +22,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Use file paths, function names, and internal terms only when needed; gloss each in one line on first use
 - Use tables and code blocks only for examples
 - Bring out detailed design only after the user agrees with the big picture
+- Answer in Korean
 
 ## Process Execution
 - Before/after execution: assess persistence and CPU/memory/disk/network impact; verify cleanup and host recovery
@@ -42,4 +43,4 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Comments in English; explain only core logic (no diff/change notes)
 - Code principles: clean/meaningful naming, optimal time & space, thorough error handling, brief rationale after writing, secure coding
 - Reuse common behavior via functions/methods/modules
-
+- Avoid hardcoded indices by defining named constants or enums instead

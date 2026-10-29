@@ -64,8 +64,31 @@ views:
       note.started: 125
       note.end-date: 125
       formula.redmine_link: 85
+  - type: table
+    name: 보관
+    filters:
+      and:
+        - status == "archived"
+    order:
+      - file.name
+      - started
+      - end-date
+      - formula.redmine_link
+    sort:
+      - property: end-date
+        direction: DESC
+    columnSize:
+      file.name: 300
+      note.started: 125
+      note.end-date: 125
+      formula.redmine_link: 85
   - type: tm-timeline
     name: 타임라인
+    filters:
+      or:
+        - status == "done"
+        - status == "in_progress"
+        - status == "todo"
     groupBy:
       property: status
       direction: ASC
@@ -83,5 +106,6 @@ views:
       - todo
       - in_progress
       - done
+      - archived
     columnWidth: 440
     imageAspectRatio: 0.6

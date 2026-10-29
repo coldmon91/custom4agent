@@ -9,7 +9,7 @@ export function nfc(value: string): string {
   return value.normalize("NFC");
 }
 
-// A colon (ASCII or full-width) separates parts like `rsmuxer: 내용`, written as ` - ` in titles.
+// An ASCII or full-width colon separates parts like `rsmuxer: 내용`, written as ` - ` in titles.
 const COLON = /[:：]+/;
 
 /** Title usable as heading, folder name and file name on both macOS and Windows. */

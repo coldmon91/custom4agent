@@ -21,7 +21,7 @@ const DEFAULT_CONFIG: SelectorConfig = {
   persistThinkingLevel: true,
   selectorShortcut: "alt+p",
   cycleThinkingShortcut: "ctrl+shift+t",
-  maxFavoriteModels: 5,
+  maxFavoriteModels: 10,
   maxRecentModels: 5,
   maxVisibleModels: 10,
 };
