@@ -1,6 +1,6 @@
 ---
 name: diataxis-docs
-description: Use when creating new technical documentation or editing existing documentation, before drafting or making changes — including README files, wiki pages, guides, reference pages, and release notes. Do NOT trigger for read-only reading, summarizing, reviewing, or analyzing documents, or for documentation toolchain and API-doc generator setup that does not change documentation content.
+description: Use when creating new technical documentation or editing existing documentation, before drafting or making changes — including README files, wiki pages, guides, and reference pages. Do NOT trigger for release notes or CHANGELOG entries, read-only reading, summarizing, reviewing, or analyzing documents, or for documentation toolchain and API-doc generator setup that does not change documentation content.
 ---
 
 # Diátaxis Documentation
@@ -17,12 +17,12 @@ Diátaxis is a **guide, not a plan**. Don't design the four-section structure up
 
 Load this skill **before drafting new technical documentation or modifying existing documentation content**, even when the document type is already clear.
 
-- Creating a new README, wiki page, guide, reference page, or release note
+- Creating a new README, wiki page, guide, or reference page
 - Updating, adding, removing, or rewriting existing documentation content
 - Editing wording, grammar, page titles, or section headings
 - Splitting or restructuring pages as part of a requested documentation change
 
-**Not for:** read-only reading, summarizing, reviewing, or analyzing documents; docs-toolchain setup (Sphinx/MkDocs/Docusaurus) or API-doc generator setup without documentation-content changes.
+**Not for:** release notes or CHANGELOG entries (use writing-release-notes); read-only reading, summarizing, reviewing, or analyzing documents; docs-toolchain setup (Sphinx/MkDocs/Docusaurus) or API-doc generator setup without documentation-content changes.
 
 For small edits, apply the guidance only to the requested content; do not restructure unrelated sections.
 
