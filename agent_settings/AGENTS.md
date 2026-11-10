@@ -24,6 +24,8 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Bring out detailed design only after the user agrees with the big picture
 - Answer in Korean
 
+- When you make a git commit message, do not add `Co-Authored-By: <AI> <email>`
+
 ## Process Execution
 - Before/after execution: assess persistence and CPU/memory/disk/network impact; verify cleanup and host recovery
 - Minimum scope, concurrency, and resources; track spawned processes and resources
