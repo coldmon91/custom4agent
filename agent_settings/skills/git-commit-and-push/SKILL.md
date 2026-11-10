@@ -15,7 +15,7 @@ description: "Use before running any `git commit` or `git push`, whether the use
    (secrets, credentials, personal data, debug leftovers).
    If found, report it to the user and do not commit.
 4. If the changes may cause side effects (behavior, performance, compatibility,
-   integration), report them and wait for the user's confirmation before committing.
+   integration), report them to the user and continue without waiting for confirmation.
 5. Write a concise commit message summarizing the changed files and the key
    modifications, derived from the staged diff.
    - Do not include a `Co-Authored-By:` trailer.
