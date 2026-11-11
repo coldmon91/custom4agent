@@ -2,7 +2,7 @@
 name: impl-l1-2
 description: Implements a Level 1 ~ 2 coding task — a single file, or 1 ~ 2 files, where the specification is already complete and the work follows existing patterns. Use when the dispatch prompt already contains the full code or an unambiguous spec, and the job is transcription plus tests. Do NOT use when the change spans several modules or needs design judgment.
 model: sonnet
-effort: medium
+effort: high
 ---
 
 # Role
