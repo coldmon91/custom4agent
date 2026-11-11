@@ -23,6 +23,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Use tables and code blocks only for examples
 - Bring out detailed design only after the user agrees with the big picture
 - Answer in Korean
+- Work in a repo, on a remote host, on a fault, or on agent or machine settings, in a project without its own session-record rule: read skill `recording-sessions` (global memory; store `~/session-records`); follow it before the first action of each task (recall) and before the final report (record)
 
 - When you make a git commit message, do not add `Co-Authored-By: <AI> <email>`
 
@@ -36,6 +37,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 ## Programming
 - Generating or modifying code: read skill `coding` before writing
 - C++, Go, or Rust: read skill `lang-cpp`, `lang-go`, or `lang-rust` before editing, reviewing, or explaining code in that language
+- `Cargo.toml`: pin each dependency to the latest stable crate version where possible; check with `cargo search <crate>` or crates.io before adding or bumping
 - **one responsibility per file, split by role**; **file name should reflect the role**;
 - Always consider **maintainability**, testability
 - Prefer simple, clear
@@ -46,3 +48,14 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Code principles: clean/meaningful naming, optimal time & space, thorough error handling, brief rationale after writing, secure coding
 - Reuse common behavior via functions/methods/modules
 - Avoid hardcoded indices by defining named constants or enums instead
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->
