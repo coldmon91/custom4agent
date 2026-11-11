@@ -17,7 +17,9 @@ The topic list below is used twice: to file a record, and to decide when to look
 - Root, the memory store: `~/session-records` (local disk only; not inside a git repo or a cloud-synced folder)
 - Folder: `~/session-records/{topic}/{YYMMDD}-{session-id}/` holding `overview.md` and `history.md`
   - `YYMMDD`: session start date (`date +%y%m%d`), fixed once created
-  - `session-id`: the subject, 10 characters or fewer, lowercase letters, digits, `-`
+  - `session-id`: the work subject at a glance — 2 to 4 English words in kebab-case, naming the thing worked on and what was done to it, 30 characters or fewer, lowercase letters, digits, `-`
+    - Ticket work: end with the ticket number, as in `timespan-gap-282007`
+    - Examples: `allowlist-validator`, `fakessl-master-sync`, `slot-drag-move`, `oss-ledger-update`
 
 ## Topics
 
@@ -97,7 +99,7 @@ updated: 2026-11-10
 project: /Users/me/src/relay-tool
 keys: [pool.py, test_pool_shutdown]
 ---
-# pool-race — flaky pool shutdown test
+# pool-shutdown-race — flaky pool shutdown test
 
 - Request: test_pool_shutdown fails about 1 run in 20
 - Result: close() now joins worker threads; 0 failures in 1000 runs (a1b2c3d)
@@ -119,7 +121,7 @@ Anything a repo already holds (the diff, the commit message, the text of a desig
 A credential enters the record as the name of the place it is stored.
 
 ```markdown
-# pool-race history
+# pool-shutdown-race history
 
 ## 2026-11-10
 - Finding: 9 failures in 200 runs (`pytest -k pool_shutdown --count 200`)
@@ -139,6 +141,7 @@ A fact that stays true across sessions (a preference, a naming rule, a fixed con
 - A second dated folder for continued work: run recording step 1 first
 - A folder for a question-only session: last row of the recording table
 - Every record of a topic opened at task start: stage 2 is for matching records only
+- `session-id` cut to an abbreviation (`allowlistv`, `ts-282007`): words that name the subject, as in `allowlist-validator`
 - `keys` paraphrased or translated: the spelling used in commands, paths, or config
 - A diff or commit message restated in `history.md`: one `Pointer` line
 - `updated` left at the creation date after later edits
