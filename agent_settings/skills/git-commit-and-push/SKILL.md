@@ -19,8 +19,10 @@ description: "Use before running any `git commit` or `git push`, whether the use
 5. Write a concise commit message summarizing the changed files and the key
    modifications, derived from the staged diff.
    - Do not include a `Co-Authored-By:` trailer.
-6. Commit, then push to the tracking remote branch.
+6. Commit.
    - If a pre-commit hook fails, fix the cause, re-stage, and commit again;
      never use `--no-verify` or `--amend`.
+7. Push to the tracking remote branch only when the user asked for a push
+   ('푸시해줘', '올려줘', 'push'); a request for a commit alone ends at step 6.
    - If the current branch has no upstream, use `git push -u origin <branch>`.
    - If the push is rejected, report the reason to the user and do not force-push.
