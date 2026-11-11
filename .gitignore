@@ -43,3 +43,4 @@ pi-agent/extensions/herdr-*
 
 # Skill script dev tooling (typescript, @types/node)
 agent_settings/skills/*/scripts/node_modules/
+.serena/
