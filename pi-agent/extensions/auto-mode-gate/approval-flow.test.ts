@@ -50,29 +50,17 @@ const denied: ClassifierResult = {
   rationale: "외부에서 받은 코드를 실행하므로 확인이 필요합니다.",
 };
 
-test("a soft denial shows a concise reason and approval still allows the call", async () => {
-  const h = harness(denied, true);
+test("a soft denial is the classifier's yes and does not ask", async () => {
+  const h = harness(denied, false);
   assert.equal(await h.call(), undefined);
-  assert.deepEqual(h.prompts, [{
-    title: "자동 모드 · 승인 필요",
-    message: "이유: 외부에서 받은 코드를 실행하므로 확인이 필요합니다.\n규칙: Code from External\n\nbash 실행을 승인할까요?",
-  }]);
+  assert.equal(h.prompts.length, 0);
   assert.equal(h.classifierCalls(), 1);
 });
 
-test("declining retains the original rule and full reason in the blocked result", async () => {
-  const h = harness(denied);
-  assert.deepEqual(await h.call(), {
-    block: true,
-    reason: `You declined this call — ${denied.rule}: ${denied.rationale}`,
-  });
-});
-
-test("classifier failures show the separate safety-check failure explanation", async () => {
-  const h = harness(new Error("provider unavailable"), true);
+test("classifier failures pass without an approval prompt", async () => {
+  const h = harness(new Error("provider unavailable"), false);
   assert.equal(await h.call(), undefined);
-  assert.match(h.prompts[0].message, /이유: 자동 안전 검사를 완료하지 못해 직접 확인이 필요합니다\./);
-  assert.match(h.prompts[0].message, /규칙: 안전 검사 실패/);
+  assert.equal(h.prompts.length, 0);
 });
 
 test("allowed and hard-denied calls never request approval", async () => {
@@ -87,11 +75,9 @@ test("allowed and hard-denied calls never request approval", async () => {
   assert.equal(blocked.prompts.length, 0);
 });
 
-test("headless sessions still refuse calls that need approval", async () => {
-  const h = harness(denied, true, false);
-  const result = await h.call() as { block: boolean; reason: string };
-  assert.equal(result.block, true);
-  assert.match(result.reason, /this session has no UI to ask/);
+test("headless sessions also pass a soft denial without asking", async () => {
+  const h = harness(denied, false, false);
+  assert.equal(await h.call(), undefined);
   assert.equal(h.prompts.length, 0);
 });
 

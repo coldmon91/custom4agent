@@ -64,10 +64,15 @@ keybind = cmd+shift+w=unbind
 # Korean (Hangul) key mappings - make Ctrl+한글키 work like Ctrl+영문키
 keybind = ctrl+ㅊ=text:\x03
 
-# Korean (Hangul) key mapping - make Opt+ㅔ (physical P key, 두벌식) work like Opt+P.
-# Uses the W3C physical key code (key_p) so it matches regardless of keyboard layout,
-# instead of matching the Unicode codepoint which would only match "p" on a US layout.
+# Korean IME (두벌식): ㅔ is the label of physical P.
+# Opt+ㅔ matches the existing Opt+P binding (ESC p).
+# Ctrl+Opt+ㅔ sends the kitty CSI-u form of Ctrl+Alt+p (codepoint 112, mods 7).
+# That is what an unbound Ctrl+Opt+p delivers to apps that enable kitty keyboard
+# protocol, including pi. Do not also bind ctrl+opt+key_p: physical key_p
+# would override that native encoding for the Latin chord.
 keybind = opt+key_p=text:\x1bp
+keybind = opt+ㅔ=text:\x1bp
+keybind = ctrl+opt+ㅔ=text:\x1b[112;7u
 
 # Fix Shift+Enter for Claude Code multiline input
 keybind = shift+enter=text:\n

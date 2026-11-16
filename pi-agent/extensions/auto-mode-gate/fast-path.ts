@@ -65,7 +65,7 @@ export function isAutoApproved(
   return false;
 }
 
-/** Policy changes require user approval even when a classifier would allow them. */
+/** Policy changes are not a fast-path allow. The classifier judges them. */
 export function requiresPermissionPolicyApproval(
   action: PendingAction,
   boundary: TrustBoundary,

@@ -164,11 +164,18 @@ config.keys = {
 		mods = "CMD",
 		action = act.CloseCurrentPane({ confirm = true }),
 	},
-	-- Korean IME: Opt+ㅔ → same as Opt+p (ESC+p)
+	-- Korean IME: ㅔ is the 두벌식 label of physical P.
+	-- SendKey re-encodes as p, so the bytes match Opt+p / Ctrl+Opt+p
+	-- under both legacy meta and kitty keyboard protocol.
 	{
 		key = "ㅔ",
 		mods = "OPT",
-		action = act.SendString("\x1bp"),
+		action = act.SendKey({ key = "p", mods = "OPT" }),
+	},
+	{
+		key = "ㅔ",
+		mods = "CTRL|OPT",
+		action = act.SendKey({ key = "p", mods = "CTRL|OPT" }),
 	},
 }
 

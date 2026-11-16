@@ -23,8 +23,6 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Use tables and code blocks only for examples
 - Bring out detailed design only after the user agrees with the big picture
 - Answer in Korean
-- Work in a repo, on a remote host, on a fault, or on agent or machine settings, in a project without its own session-record rule: read skill `recording-sessions` (global memory; store `~/session-records`); follow it before the first action of each task (recall) and before the final report (record)
-
 - When you make a git commit message, do not add `Co-Authored-By: <AI> <email>`
 
 ## Process Execution

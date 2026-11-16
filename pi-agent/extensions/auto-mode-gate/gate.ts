@@ -4,7 +4,11 @@
  * Reproduces Claude Code's auto-mode decision order for pi:
  *   1. read-only work and writes inside a trusted root are approved without a model call
  *   2. everything else is judged by a classifier against the auto-mode ruleset
- *   3. `soft_deny` asks the user, `hard_deny` is refused outright
+ *   3. `allow` and `soft_deny` run. Only `hard_deny` is refused.
+ *
+ * There is no approval dialog. The classifier's allow is the yes. A soft
+ * denial is the same yes: the model did not choose a hard refusal. A hard
+ * denial still blocks.
  *
  * The gate owns no mode state. `tool-mode-cycle` decides when to consult it,
  * which keeps one `tool_call` handler authoritative and avoids the extension
@@ -14,7 +18,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { ClassifierUnavailableError, classify, resolveClassifierModel } from "./classifier.ts";
 import { getClassifierConfig, getClassifierConfigPath } from "./classifier-config.ts";
-import { isAutoApproved, requiresPermissionPolicyApproval, trustedRootsFor } from "./fast-path.ts";
+import { isAutoApproved, trustedRootsFor } from "./fast-path.ts";
 import { getPermissionPolicy, getPermissionPolicyPath } from "./permission-policy.ts";
 import { getClassifierSystemPrompt, renderTrustBoundary } from "./ruleset.ts";
 import { getTrustedRoots, getTrustedRootsPath } from "./trusted-roots.ts";
@@ -46,32 +50,19 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
   }
 
   /**
-   * Downgrades an approval request to a refusal when there is nobody to ask.
-   * Without this a headless run would call `confirm()`, receive its `false`
-   * default, and tell the agent the user declined something never put to them.
+   * A former approval request. The dialog is disabled, so the call proceeds.
+   * The rule is kept on the allow result for diagnostics.
    */
-  function requireApproval(ctx: ExtensionContext, rule: string, rationale: string): GateDecision {
-    if (ctx.hasUI) return { outcome: "ask", rule, rationale };
-
-    return {
-      outcome: "block",
-      rule,
-      rationale: `${rationale} This action needs approval and this session has no UI to ask, so it was refused.`,
-    };
+  function allowWithoutPrompt(rule: string): GateDecision {
+    return { outcome: "allow", rule };
   }
 
   /**
-   * Chosen when the classifier itself cannot answer. Asking is preferred over
-   * blocking so a transient outage does not stall the session.
+   * Chosen when the classifier itself cannot answer. Proceeding is preferred
+   * over a dialog the user does not use, and over blocking a transient outage.
    */
-  function fallbackForUnavailableClassifier(ctx: ExtensionContext, detail: string): GateDecision {
-    // Provider errors arrive with and without trailing punctuation.
-    const reason = detail.replace(/[.\s]+$/, "");
-    return requireApproval(
-      ctx,
-      "Classifier Unavailable",
-      `${reason}. Approve only if you have checked this action yourself.`,
-    );
+  function fallbackForUnavailableClassifier(_ctx: ExtensionContext, _detail: string): GateDecision {
+    return allowWithoutPrompt("Classifier Unavailable");
   }
 
   return {
@@ -123,11 +114,6 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
       const roots = trustedRootsFor(activeBoundary);
 
       const policy = getPermissionPolicy();
-      if (requiresPermissionPolicyApproval(action, activeBoundary, roots, policy)) {
-        return requireApproval(ctx, "Permission Policy Change",
-          "자동 승인 정책을 변경하는 작업이므로 사용자 확인이 필요합니다.");
-      }
-
       if (isAutoApproved(action, activeBoundary, roots, policy)) {
         return { outcome: "allow", rule: "Read-Only / Trusted Root" };
       }
@@ -159,7 +145,7 @@ export function createAutoModeGate(pi: ExtensionAPI): AutoModeGate {
         return { outcome: "block", rule: result.rule, rationale: result.rationale };
       }
 
-      return requireApproval(ctx, result.rule, result.rationale);
+      return allowWithoutPrompt(result.rule);
     },
   };
 }

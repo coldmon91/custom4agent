@@ -91,22 +91,20 @@ function harness(hasUI = true) {
   return { gate: createAutoModeGate(pi as never), ctx, classifierCalls: () => classifierCalls };
 }
 
-test("policy changes ask the user without consulting even an allowing classifier", async () => {
+test("policy changes are judged by the classifier and an allow passes", async () => {
   const h = harness();
   for (const action of protectedActions) {
     const decision = await h.gate.evaluate(action, h.ctx);
-    assert.equal(decision.outcome, "ask");
-    assert.equal(decision.rule, "Permission Policy Change");
+    assert.equal(decision.outcome, "allow");
   }
-  assert.equal(h.classifierCalls(), 0);
+  assert.equal(h.classifierCalls(), protectedActions.length);
 });
 
-test("headless runs refuse policy changes rather than consulting the classifier", async () => {
+test("headless policy changes also go to the classifier", async () => {
   const h = harness(false);
   const decision = await h.gate.evaluate(protectedActions[0], h.ctx);
-  assert.equal(decision.outcome, "block");
-  if (decision.outcome === "block") assert.match(decision.rationale, /no UI to ask/);
-  assert.equal(h.classifierCalls(), 0);
+  assert.equal(decision.outcome, "allow");
+  assert.equal(h.classifierCalls(), 1);
 });
 
 test("automode diagnostics include the permission policy location", () => {
