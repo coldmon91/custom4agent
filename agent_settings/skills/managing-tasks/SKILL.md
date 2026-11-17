@@ -47,7 +47,7 @@ Frontmatter, folder moves, names, logs, progress, subtasks, commits, and Redmine
 ## Title
 
 - `<prefix> - <content>` (e.g. `rsmuxer - 메모리 누수 조사`, `session3 - openssl 3.5.6 적용`, `development - Task 스크립트 작성`)
-- Prefix: first choice is the target component, product, or project; a version suffix is allowed (`session3`). No fixed list. Decide from the conversation, repository, or Redmine issue (see `rsupport` skill)
+- Prefix: first choice is the target component, product, or project; a version suffix is allowed (`session3`). No fixed list. Decide from the conversation, repository, or Redmine issue
 - No identifiable target → a category word for the work (e.g. `development`, `bug-fix`, `ops`, `support`, `research`, `docs`). Not a fixed list; pick what fits
 - If neither can be decided, ask before creating. Use a user-given prefix as-is
 - `:` becomes ` - `; forbidden characters become spaces. If the result has `titleChanged`, report the new title
