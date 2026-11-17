@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import askUser, { normalizeQuestions } from "./index.ts";
+import askUser, { isNestedToolCall, normalizeQuestions } from "./index.ts";
 import type { AskUserAnswer, AskUserInput, AskUserResult } from "./types.ts";
 
 interface CapturedTool {
@@ -112,6 +112,31 @@ test("invalid input is rejected", () => {
 			}),
 		/duplicate option/,
 	);
+});
+
+test("a nested tool call id is recognized", () => {
+	assert.equal(isNestedToolCall("call-1"), false);
+	assert.equal(isNestedToolCall("call-1/0"), false);
+	assert.equal(isNestedToolCall("call-1/"), false);
+	assert.equal(isNestedToolCall("call-1/1"), true);
+	assert.equal(isNestedToolCall("parent/1/2"), true);
+});
+
+test("a nested call fails before showing the UI", async () => {
+	const tool = registerTool();
+	let shown = false;
+	const ctx = {
+		mode: "tui",
+		ui: {
+			custom: async () => {
+				shown = true;
+				return null;
+			},
+		},
+	};
+
+	await assert.rejects(tool.execute("call-1/1", input(), null, null, ctx), /direct tool call/);
+	assert.equal(shown, false);
 });
 
 test("a non-TUI mode fails the tool call", async () => {

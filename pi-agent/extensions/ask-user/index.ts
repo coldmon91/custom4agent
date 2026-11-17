@@ -19,6 +19,16 @@ import type {
 } from "./types.ts";
 
 /**
+ * Pi names a call issued by another tool `<caller id>/<n>`, starting at 1.
+ * That result is not stored, so an answer given there would be lost.
+ */
+export function isNestedToolCall(toolCallId: string): boolean {
+	const slash = toolCallId.lastIndexOf("/");
+	if (slash <= 0) return false;
+	return /^[1-9]\d*$/.test(toolCallId.slice(slash + 1));
+}
+
+/**
  * Validates beyond the schema and assigns internal ids.
  * Throws so pi reports the call as a failed tool result.
  */
@@ -79,7 +89,8 @@ export default function askUser(pi: ExtensionAPI) {
 		description:
 			"Ask the user up to four multiple-choice questions and wait for the answers. " +
 			"Each question shows numbered options plus an 'Other' row for free text, and can accept " +
-			"a single choice or several. Use it when a decision is the user's to make.",
+			"a single choice or several. Use it when a decision is the user's to make. " +
+			"Call ask_user directly; a call from another tool such as codemode drops the user's answer.",
 		parameters: AskUserParams,
 		executionMode: "sequential",
 		promptSnippet: "Ask the user up to four multiple-choice questions and receive the answers",
@@ -88,9 +99,16 @@ export default function askUser(pi: ExtensionAPI) {
 			"Investigate the code and docs first; do not use ask_user for facts that are verifiable in the repository.",
 			"Do not use ask_user for minor points that a safe default can cover.",
 			"Group related questions into a single ask_user call, at most four.",
+			"Call ask_user directly. Do not call ask_user from codemode or any other tool, because that drops the user's answer.",
 		],
 
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+		async execute(toolCallId, params, _signal, _onUpdate, ctx) {
+			if (isNestedToolCall(toolCallId)) {
+				throw new Error(
+					"ask_user must be a direct tool call. A call from another tool, such as a codemode script, does not keep the user's answer. Call ask_user itself.",
+				);
+			}
+
 			const questions = normalizeQuestions(params as AskUserInput);
 
 			if (ctx.mode !== "tui") {

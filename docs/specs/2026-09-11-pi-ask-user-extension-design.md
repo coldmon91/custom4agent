@@ -69,7 +69,7 @@ pi-agent/extensions/ask-user/
 - `questionnaire-state.ts`: UI와 외부 패키지에 의존하지 않는 선택, 탭 이동, 제출 검증 상태 머신
 - `questionnaire-component.ts`: 키 입력 연결과 pi TUI 렌더링
 - `tool-render.ts`: `renderCall`·`renderResult`와 텍스트 요약 구현
-- `index.test.ts`: 입력 검증, 도구 등록 메타데이터, 취소·비-TUI·`undefined` 결과 검증
+- `index.test.ts`: 입력 검증, 도구 등록 메타데이터, 중첩 호출 거부, 취소·비-TUI·`undefined` 결과 검증
 - `questionnaire-state.test.ts`: 상태 머신의 단위 테스트
 - `questionnaire-component.test.ts`: 키 매핑과 렌더링 검증
 
@@ -166,6 +166,7 @@ interface AskUserCancelledResult {
 - `Investigate the code and docs first; do not use ask_user for facts that are verifiable in the repository.`
 - `Do not use ask_user for minor points that a safe default can cover.`
 - `Group related questions into a single ask_user call, at most four.`
+- `Call ask_user directly. Do not call ask_user from codemode or any other tool, because that drops the user's answer.`
 
 `promptSnippet`은 `Available tools` 섹션용 한 줄 요약으로 `Ask the user up to four multiple-choice questions and receive the answers`를 사용한다.
 
@@ -274,17 +275,19 @@ Other의 `Space` 토글은 해제 경로를 위해 필요하다.
 ## 데이터 흐름
 
 1. 모델이 `ask_user` 도구를 호출한다.
-2. `index.ts`가 스키마 외의 중복·공백 조건을 추가 검증하고 내부 질문 ID를 부여한다.
-3. `ctx.mode === "tui"`를 확인하고, 아니면 예외를 발생시킨다.
-4. `QuestionnaireComponent`가 `QuestionnaireState`를 생성해 사용자 입력을 처리한다.
-5. 각 입력은 상태 머신을 갱신하고 `tui.requestRender()`를 호출한다.
-6. Submit 성공 시 정규화한 답변 배열을 `done()`으로 반환한다.
-7. `ctx.ui.custom()`의 반환값이 `undefined`이면 UI를 표시할 수 없었던 경우로 보고 예외를 발생시킨다.
-8. `index.ts`가 텍스트 요약과 구조화된 `details`를 모델에 반환한다.
-9. 모델이 답변을 반영해 기존 작업을 계속한다.
+2. 호출 id가 `<caller id>/<n>`이면 다른 도구의 중첩 호출이다. UI를 열지 않고 예외를 발생시킨다.
+3. `index.ts`가 스키마 외의 중복·공백 조건을 추가 검증하고 내부 질문 ID를 부여한다.
+4. `ctx.mode === "tui"`를 확인하고, 아니면 예외를 발생시킨다.
+5. `QuestionnaireComponent`가 `QuestionnaireState`를 생성해 사용자 입력을 처리한다.
+6. 각 입력은 상태 머신을 갱신하고 `tui.requestRender()`를 호출한다.
+7. Submit 성공 시 정규화한 답변 배열을 `done()`으로 반환한다.
+8. `ctx.ui.custom()`의 반환값이 `undefined`이면 UI를 표시할 수 없었던 경우로 보고 예외를 발생시킨다.
+9. `index.ts`가 텍스트 요약과 구조화된 `details`를 모델에 반환한다.
+10. 모델이 답변을 반영해 기존 작업을 계속한다.
 
 ## 오류와 취소 처리
 
+- 다른 도구의 중첩 호출: UI를 열지 않고 직접 `ask_user` 호출을 요구하는 도구 실행 오류
 - 잘못된 도구 입력: 예외를 발생시켜 pi가 실패한 도구 결과로 모델에 전달
 - TUI 이외의 모드: 지원 모드를 명시한 도구 실행 오류
 - `ctx.ui.custom()` 반환값 `undefined`: UI 표시 불가로 간주하고 도구 실행 오류
@@ -373,7 +376,7 @@ pi
 - 모든 탭 하단의 전역 Submit 동작
 - 질문 1개일 때 탭 바 없는 화면
 - 미응답 질문 제출 차단
-- 취소, 비-TUI 오류, `ctx.ui.custom()` `undefined` 반환 처리
+- 취소, 중첩 호출 거부, 비-TUI 오류, `ctx.ui.custom()` `undefined` 반환 처리
 - `renderCall`과 `renderResult`로 트랜스크립트 표시
 - 상태 머신 테스트가 `npm install` 없이 통과
 - 수동 TUI 시나리오 통과
