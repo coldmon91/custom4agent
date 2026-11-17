@@ -1,21 +1,23 @@
-#!/usr/bin/env python3
-"""List the models pi can actually reach, with pricing, context, and thinking levels."""
+"""Models pi can actually reach, with pricing, context, and thinking levels."""
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import re
-import subprocess
-import sys
 from math import inf
 from pathlib import Path
-from typing import NoReturn
+
+from .common import ModelSourceError, load_raw, warn
+
+NAME = "pi"
+DEFAULT_TIMEOUT = 60.0
+SOURCE_DESCRIPTION = "`pi --list-models` output"
 
 # pi's own level ladder, weakest to strongest (see `getSupportedThinkingLevels` in pi-ai).
 THINKING_LEVELS = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
 
+LISTING_COLUMNS = 6
 SIZE_PATTERN = re.compile(r"^([\d.]+)([KM]?)$", re.IGNORECASE)
 SIZE_UNITS = {"": 1, "K": 1_000, "M": 1_000_000}
 
@@ -24,12 +26,19 @@ SIZE_UNITS = {"": 1, "K": 1_000, "M": 1_000_000}
 VERSION_TOKEN = re.compile(r"(?<![\d.])\d+(?:\.\d+)*(?![\d.]|[bB](?![a-zA-Z]))")
 
 
-def die(message: str) -> NoReturn:
-    sys.exit(f"error: {message}")
-
-
-def warn(message: str) -> None:
-    print(f"warning: {message}", file=sys.stderr)
+def add_arguments(parser) -> None:
+    parser.add_argument(
+        "--favorites",
+        action="store_true",
+        help="list only the models in favorite-models.json",
+    )
+    parser.add_argument(
+        "--sort",
+        choices=("name", "strength"),
+        default="name",
+        help="row order: provider, then model lines and versions newest first; "
+        "or most capable first by pricing (default: name)",
+    )
 
 
 def config_dir() -> Path:
@@ -45,23 +54,6 @@ def read_json(path: Path, label: str) -> dict | None:
     except (OSError, json.JSONDecodeError) as exc:
         warn(f"cannot read {label} ({path}): {exc}")
         return None
-
-
-def run_pi_list(timeout: float) -> str:
-    try:
-        return subprocess.run(
-            ["pi", "--list-models"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=True,
-        ).stdout
-    except FileNotFoundError:
-        die("`pi` executable not found in PATH")
-    except subprocess.TimeoutExpired:
-        die(f"`pi --list-models` timed out after {timeout:g}s")
-    except subprocess.CalledProcessError as exc:
-        die(f"`pi --list-models` failed (exit {exc.returncode}): {exc.stderr.strip()}")
 
 
 def parse_size(token: str) -> float:
@@ -85,9 +77,9 @@ def parse_listing(raw: str) -> list[dict]:
     available = []
     for line in raw.splitlines():
         parts = line.split()
-        if len(parts) < 6 or parts[0] == "provider":
+        if len(parts) < LISTING_COLUMNS or parts[0] == "provider":
             continue
-        provider, model_id, context, _max_out, thinking, _images = parts[:6]
+        provider, model_id, context, _max_out, thinking, _images = parts[:LISTING_COLUMNS]
         available.append({
             "provider": provider,
             "id": model_id,
@@ -95,7 +87,7 @@ def parse_listing(raw: str) -> list[dict]:
             "listed_reasoning": thinking.lower() == "yes",
         })
     if not available:
-        die("`pi --list-models` reported no usable models")
+        raise ModelSourceError("`pi --list-models` reported no usable models")
     return available
 
 
@@ -115,15 +107,9 @@ def supported_thinking(model: dict) -> list[str]:
     return supported
 
 
-def output_cost(model: dict) -> float:
+def cost_of(model: dict, kind: str) -> float:
     cost = model.get("cost")
-    value = cost.get("output") if isinstance(cost, dict) else None
-    return float(value) if isinstance(value, (int, float)) else -1.0
-
-
-def input_cost(model: dict) -> float:
-    cost = model.get("cost")
-    value = cost.get("input") if isinstance(cost, dict) else None
+    value = cost.get(kind) if isinstance(cost, dict) else None
     return float(value) if isinstance(value, (int, float)) else -1.0
 
 
@@ -132,7 +118,12 @@ def strength(model: dict) -> tuple[float, float, float, int]:
     window and reasoning headroom only break ties."""
     supported = supported_thinking(model)
     ceiling = THINKING_LEVELS.index(supported[-1]) if supported else -1
-    return (output_cost(model), input_cost(model), float(model.get("contextWindow") or 0), ceiling)
+    return (
+        cost_of(model, "output"),
+        cost_of(model, "input"),
+        float(model.get("contextWindow") or 0),
+        ceiling,
+    )
 
 
 def version_of(model: dict) -> tuple[int, ...]:
@@ -212,13 +203,13 @@ def provider_preference(config: Path) -> dict[str, int]:
 
 
 def dedupe(catalog: list[dict], preference: dict[str, int]) -> list[dict]:
-    best: dict[str, dict] = {}
+    best: dict[str, tuple] = {}
     for model in catalog:
         rank = (preference.get(model["provider"], inf), model["provider"])
         current = best.get(model["id"])
-        if current is None or rank < current["_rank"]:
-            best[model["id"]] = {**model, "_rank": rank}
-    return [{k: v for k, v in model.items() if k != "_rank"} for model in best.values()]
+        if current is None or rank < current[0]:
+            best[model["id"]] = (rank, model)
+    return [model for _, model in best.values()]
 
 
 def favorite_keys(config: Path) -> set[tuple[str, str]]:
@@ -231,114 +222,52 @@ def favorite_keys(config: Path) -> set[tuple[str, str]]:
 
 
 def describe(model: dict, favorites: set[tuple[str, str]]) -> dict:
-    out = output_cost(model)
-    inp = input_cost(model)
+    output_cost = cost_of(model, "output")
+    input_cost = cost_of(model, "input")
     return {
         "model": model["slug"],
-        "input_cost": inp if inp >= 0 else None,
-        "output_cost": out if out >= 0 else None,
+        "efforts": supported_thinking(model),
+        "input_cost": input_cost if input_cost >= 0 else None,
+        "output_cost": output_cost if output_cost >= 0 else None,
         "context": int(model.get("contextWindow") or 0),
-        "thinking": supported_thinking(model),
         "favorite": (model["provider"], model["id"]) in favorites,
     }
 
 
-def format_table(rows: list[dict]) -> str:
-    """Fixed-width columns so a caller can read a row without splitting on whitespace
-    that also appears inside the thinking list."""
-    header = ("MODEL", "IN$/M", "OUT$/M", "CONTEXT", "FAV", "THINKING")
-
-    def cost(value: float | None) -> str:
-        return f"{value:g}" if value is not None else "-"
-
-    cells = [header] + [
-        (
-            row["model"],
-            cost(row["input_cost"]),
-            cost(row["output_cost"]),
-            format_size(row["context"]),
-            "*" if row["favorite"] else "",
-            ",".join(row["thinking"]),
-        )
-        for row in rows
-    ]
-    widths = [max(len(row[i]) for row in cells) for i in range(len(header))]
-    return "\n".join(
-        "  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)).rstrip() for row in cells
-    )
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description="List the models pi can currently use.")
-    parser.add_argument("--json", action="store_true", help="emit the model list as JSON")
-    parser.add_argument(
-        "--favorites",
-        action="store_true",
-        help="list only the models in favorite-models.json",
-    )
-    parser.add_argument(
-        "--slugs",
-        action="store_true",
-        help="print bare `provider/model` slugs, one per line",
-    )
-    parser.add_argument(
-        "--sort",
-        choices=("name", "strength"),
-        default="name",
-        help="row order: provider, then model lines and versions newest first; "
-        "or most capable first by pricing (default: name)",
-    )
-    parser.add_argument(
-        "--from-file",
-        metavar="PATH",
-        help="read `pi --list-models` output from PATH instead of running pi",
-    )
-    parser.add_argument(
-        "--timeout",
-        type=float,
-        default=60.0,
-        metavar="SECONDS",
-        help="timeout for `pi --list-models` (default: 60)",
-    )
-    args = parser.parse_args()
-
-    if args.from_file:
-        try:
-            raw = Path(args.from_file).read_text(encoding="utf-8")
-        except OSError as exc:
-            die(f"cannot read {args.from_file}: {exc}")
-    else:
-        raw = run_pi_list(args.timeout)
-
+def list_models(options) -> list[dict]:
+    raw = load_raw(options, ["pi", "--list-models"])
     config = config_dir()
     store = read_json(config / "models-store.json", "models-store.json")
     catalog = dedupe(build_catalog(parse_listing(raw), store), provider_preference(config))
     if not catalog:
-        die("no model survived the availability join; run `pi update` and check `pi auth check`")
+        raise ModelSourceError(
+            "no model survived the availability join; run `pi update` and check `pi auth check`"
+        )
 
     favorites = favorite_keys(config)
-    if args.sort == "name":
-        ranked = listing_order(catalog)
-    else:
-        ranked = sorted(catalog, key=strength, reverse=True)
+    ranked = (
+        listing_order(catalog)
+        if options.sort == "name"
+        else sorted(catalog, key=strength, reverse=True)
+    )
     rows = [describe(model, favorites) for model in ranked]
-    if args.favorites:
+    if options.favorites:
         rows = [row for row in rows if row["favorite"]]
         if not rows:
-            die("no favorite model is currently reachable; drop --favorites or run `pi auth check`")
-
-    if args.json:
-        print(json.dumps(rows, indent=2))
-    elif args.slugs:
-        print("\n".join(row["model"] for row in rows))
-    else:
-        print(format_table(rows))
+            raise ModelSourceError(
+                "no favorite model is currently reachable; drop --favorites or run `pi auth check`"
+            )
+    return rows
 
 
-if __name__ == "__main__":
-    try:
-        main()
-    except BrokenPipeError:
-        # Silence the interpreter's flush-on-exit error when stdout is a closed pipe.
-        os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
-        sys.exit(0)
+def format_cost(value: float | None) -> str:
+    return f"{value:g}" if value is not None else "-"
+
+
+def table_columns(rows: list[dict]) -> list[tuple]:
+    return [
+        ("IN$/M", lambda row: format_cost(row["input_cost"])),
+        ("OUT$/M", lambda row: format_cost(row["output_cost"])),
+        ("CONTEXT", lambda row: format_size(row["context"])),
+        ("FAV", lambda row: "*" if row["favorite"] else ""),
+    ]

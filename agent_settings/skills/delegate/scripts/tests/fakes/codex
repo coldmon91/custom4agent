@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Stand-in for the codex CLI used by the run lifecycle tests.
+
+`codex debug models` prints a one-model catalog. Any other call reads the prompt from
+stdin, logs progress, sleeps FAKE_SLEEP seconds, writes `echo:<prompt>` to the `-o`
+path, and exits with FAKE_EXIT.
+"""
+
+import json
+import os
+import sys
+import time
+
+CATALOG = {
+    "models": [
+        {
+            "slug": "gpt-test",
+            "visibility": "list",
+            "priority": 1,
+            "default_reasoning_level": "low",
+            "supported_reasoning_levels": [{"effort": "low"}, {"effort": "high"}],
+            "description": "Fake model for tests.",
+        }
+    ]
+}
+
+args = sys.argv[1:]
+if args[:2] == ["debug", "models"]:
+    print(json.dumps(CATALOG))
+    sys.exit(0)
+
+prompt = sys.stdin.read()
+print(f"fake codex argv: {' '.join(args)}", flush=True)
+time.sleep(float(os.environ.get("FAKE_SLEEP", "0")))
+output_path = args[args.index("-o") + 1]
+with open(output_path, "w", encoding="utf-8") as output:
+    output.write(f"echo:{prompt}")
+sys.exit(int(os.environ.get("FAKE_EXIT", "0")))
