@@ -4,8 +4,11 @@ auth.json
 trust.json
 sessions/
 *.7z
+*.backup
 agent_settings/skills/my-remote/
 agent_settings/skills/rsupport/
+agent_settings/skills/orca-cli
+agent_settings/skills/remote-gateway
 
 .system
 # OS
@@ -40,6 +43,7 @@ pi-agent/tmp/
 # Machine-local Pi extensions
 pi-agent/extensions/orca-*
 pi-agent/extensions/herdr-*
+pi-agent/extensions/corgi.js
 
 # Skill script dev tooling (typescript, @types/node)
 agent_settings/skills/*/scripts/node_modules/

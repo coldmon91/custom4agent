@@ -1,7 +1,7 @@
 # Dependabot configuration for Python projects
 # Copy to .github/dependabot.yml
 #
-# See references/dependabot.md for advanced configuration.
+# See references/hooks-and-security.md (Dependabot).
 
 version: 2
 updates:

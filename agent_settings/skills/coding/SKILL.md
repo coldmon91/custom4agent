@@ -1,18 +1,20 @@
 ---
 name: coding
-description: Read when writing OR modifying code - including edits, refactoring, bug fixes, and reviews - for socket programming, multi-threading, or any other programming task. Trigger whenever you are about to add, change, or delete source code, even for a small one-line edit.
+description: Read when writing, modifying, reviewing, debugging, or explaining code - including edits, refactoring, and bug fixes - in any language. Trigger whenever you are about to add, change, or delete source code, even for a small one-line edit. Covers socket programming, multi-threading, and language guides for C++ (`.cpp`, `.h`, CMake), Go (`.go`, `go.mod`), Rust (`.rs`, `Cargo.toml`), Swift (`.swift`), and Python (`.py`, `pyproject.toml`, uv/ruff/ty setup, pip/Poetry migration).
 ---
 
 # Coding Rules
 
-## Language Skills
+## Language Guides
 
-Load the matching skill before editing, alongside these rules.
+Read the matching guide before editing, reviewing, or explaining code, alongside these rules.
+Each guide links its own deeper references.
 
-- C++ (`.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, CMake) -> `lang-cpp`
-- Go (`.go`, `go.mod`) -> `lang-go`
-- Rust (`.rs`, `Cargo.toml`) -> `lang-rust`
-- Swift (`.swift`, Swift package) -> `lang-swift`
+- C++ (`.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`, CMake) -> `references/cpp/overview.md`
+- Go (`.go`, `go.mod`) -> `references/go/overview.md`
+- Rust (`.rs`, `Cargo.toml`) -> `references/rust/overview.md`
+- Swift (`.swift`, Swift package) -> `references/swift/overview.md`
+- Python (`.py`, `pyproject.toml`, uv/ruff/ty setup) -> `references/python/overview.md`
 
 ## Before Modifying Code
 
@@ -40,6 +42,6 @@ Load the matching skill before editing, alongside these rules.
 - Never infer thread-safety from a name, or from a declaration you have not actually resolved.
   With deep inheritance, typedef chains, or heavy templates, tracing the type is unreliable —
   make the compiler or a sanitizer answer instead.
-- C++ -> `lang-cpp/references/concurrency.md`; Go -> `lang-go/references/concurrency.md`;
-  Rust -> `lang-rust/SKILL.md` (Concurrency), `lang-rust/references/async.md` (Shared state);
-  Swift -> `lang-swift/references/async-concurrency.md`
+- C++ -> `references/cpp/references/concurrency.md`; Go -> `references/go/references/concurrency.md`;
+  Rust -> `references/rust/overview.md` (Concurrency), `references/rust/references/async.md` (Shared state);
+  Swift -> `references/swift/references/async-concurrency.md`

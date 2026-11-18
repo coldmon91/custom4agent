@@ -1,12 +1,6 @@
----
-name: lang-cpp
-description: Use whenever writing, modifying, reviewing, or debugging C++ code — any `.cpp`, `.cc`, `.cxx`, `.h`, or `.hpp` file, or a CMake project — even for a one-line edit. Covers modern C++17/20/23 (concepts, ranges, coroutines), RAII and memory management, template metaprogramming, concurrency and data races, SIMD and performance bottlenecks, and CMake build configuration.
-license: MIT
-metadata:
-  author: https://github.com/Jeffallan
----
-
 # C++
+
+> Adapted from https://github.com/Jeffallan (MIT License).
 
 Match the standard the project's build already targets; use newer features only when the toolchain supports them.
 

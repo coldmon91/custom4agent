@@ -23,7 +23,6 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Use tables and code blocks only for examples
 - Bring out detailed design only after the user agrees with the big picture
 - Answer in Korean
-- When you make a git commit message, do not add `Co-Authored-By: <AI> <email>`
 
 ## Process Execution
 - Before/after execution: assess persistence and CPU/memory/disk/network impact; verify cleanup and host recovery
@@ -34,7 +33,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 
 ## Programming
 - Generating or modifying code: read skill `coding` before writing
-- C++, Go, or Rust: read skill `lang-cpp`, `lang-go`, or `lang-rust` before editing, reviewing, or explaining code in that language
+- C++, Go, Python, Rust, or Swift: read skill `coding` and its matching language guide before editing, reviewing, or explaining code in that language
 - `Cargo.toml`: pin each dependency to the latest stable crate version where possible; check with `cargo search <crate>` or crates.io before adding or bumping
 - **one responsibility per file, split by role**; **file name should reflect the role**;
 - Always consider **maintainability**, testability

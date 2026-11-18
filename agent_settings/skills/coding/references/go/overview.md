@@ -1,12 +1,6 @@
----
-name: lang-go
-description: Use whenever writing, modifying, reviewing, or debugging Go code — any `.go` file, `go.mod`, or Go module — even for a one-line edit. Covers goroutines, channels, and concurrency, idiomatic error handling, generics and interfaces, gRPC or REST microservices, pprof performance tuning, CLI tools, benchmarks, and table-driven tests.
-license: MIT
-metadata:
-  author: https://github.com/Jeffallan
----
-
 # Go
+
+> Adapted from https://github.com/Jeffallan (MIT License).
 
 ## Rules
 

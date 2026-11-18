@@ -1,8 +1,3 @@
----
-name: lang-rust
-description: Use whenever writing, modifying, reviewing, or debugging Rust code — any `.rs` file, `Cargo.toml`, or Cargo workspace — even for a one-line edit, and when the user asks about Rust idioms or anti-patterns. Covers panic defense (indexing, arithmetic overflow, unwrap/expect, as casts, RefCell conflicts), memory safety and undefined behavior, ownership, borrowing, lifetimes, trait-based API design, generics, async with tokio, error handling, testing, FFI, and unsafe. Keywords - Rust, Cargo, rustc, clippy, panic safety, borrow checker, systems programming.
----
-
 # Rust
 
 Rust 2024 edition. **Panic and memory safety come first**: when safety conflicts with idiom, brevity, or performance, safety wins.

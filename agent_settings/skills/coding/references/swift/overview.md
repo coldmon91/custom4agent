@@ -1,12 +1,6 @@
----
-name: lang-swift
-description: Use whenever writing, modifying, reviewing, or debugging Swift code — any `.swift` file or Swift package — even for a one-line edit. Covers SwiftUI views and state management, protocol-oriented design, async/await, actors and thread safety, UIKit integration, Combine, and server-side Swift (Vapor) on iOS, macOS, watchOS, and tvOS.
-license: MIT
-metadata:
-  author: https://github.com/Jeffallan
----
-
 # Swift
+
+> Adapted from https://github.com/Jeffallan (MIT License).
 
 ## Rules
 
