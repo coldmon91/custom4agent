@@ -1,6 +1,6 @@
 ---
 name: analysis-root-cause
-description: Systematic bug investigation workflow that enforces a reproduce → hypothesize → verify loop instead of jumping to fixes. Use this skill whenever the user reports a bug, unexpected behavior, crash, flaky test, regression, "it works on my machine" issue, intermittent failure, or anything where the root cause is not yet understood — even if the user only says "this is broken" or "fix this bug". Also use when the user asks to investigate, diagnose, or debug something, or when a fix is being proposed without confirmed evidence of the underlying cause.
+description: Use when the user reports a bug, crash (SIGSEGV, abort), wrong output, flaky test, regression, memory error (use-after-free, leak, ASan/TSan/Valgrind report), race or deadlock, intermittent or production-only failure, or anything whose root cause is not yet understood — even a bare "this is broken", "fix this bug", or "원인 찾아줘". Also use when asked to investigate, diagnose, or debug, when a fix is proposed without evidence of its cause, when handing a bug fix to another agent, or when an investigation is stuck.
 ---
 
 # Root Cause Analysis
@@ -9,15 +9,37 @@ A disciplined, evidence-driven workflow for finding root causes instead of chasi
 
 ## Why this matters
 
-The default failure mode when debugging is to guess at a fix based on pattern-matching: "this kind of error usually means X, so let me change Y." That approach sometimes works, but when it doesn't, it produces plausible-looking patches that mask the real bug, introduce regressions, or fix the wrong layer of the stack. The cost of skipping investigation is paid later, often by someone else.
+The default failure mode when debugging is to guess at a fix based on pattern-matching: "this kind of error usually means X, so let me change Y." When that guess is wrong, it produces plausible-looking patches that mask the real bug, introduce regressions, or fix the wrong layer of the stack.
 
-This skill enforces three checkpoints — **Reproduce**, **Hypothesize**, **Verify** — and requires an explicit artifact at each one before moving on. The point is not bureaucracy; the point is that each checkpoint catches a different class of mistake:
+The second failure mode is giving up early: "cannot reproduce" or "both hypotheses failed" treated as the end of the investigation.
+A blocked method calls for a different method, not a stop.
+
+This skill enforces three checkpoints — **Reproduce**, **Hypothesize**, **Verify** — each with an explicit artifact:
 
 - **Reproduce** catches "bugs" that don't exist, or exist only under conditions nobody wrote down.
 - **Hypothesize** catches fixes that target symptoms instead of causes.
-- **Verify** catches fixes that appear to work but actually didn't address the hypothesized cause.
+- **Verify** catches fixes that appear to work but didn't address the hypothesized cause.
 
-Do not skip stages, even when the bug seems obvious. Obvious bugs are exactly where this workflow pays for itself — the overhead is small, and on the rare occasion that the "obvious" answer is wrong, you save a debugging session.
+Do not skip stages, even when the bug seems obvious. Obvious bugs are exactly where this workflow pays for itself.
+
+## Mode
+
+Decide the mode from the request before starting:
+
+- **Analysis mode** — the user asked for the cause ("원인 찾아줘", "고치지 마", a diagnosis or review). The investigation ends at a tested hypothesis plus a proposed fix direction. Edit no product code.
+- **Fix mode** — the user asked for a fix. After the hypothesis is supported, state the planned fix and why it breaks the causal chain, get the user's approval, then apply and verify it.
+
+## Bug-type guides
+
+Some bug types need their own diagnosis steps and forbid specific fixes.
+When the symptom matches, read the guide and apply it inside the loop.
+
+- use-after-free, dangling pointer, double free, heap-use-after-free (ASan), access to an object after shutdown or from a late callback → [references/use-after-free.md](references/use-after-free.md)
+
+No match → the loop alone.
+Several match → start with the earliest visible symptom, and read another guide once the cause turns out to be its type.
+
+<!-- Add a guide when a type has two of: its own diagnosis steps, a common band-aid fix to forbid, fix strategies that diverge at the ownership/sync/architecture level. -->
 
 ## The loop
 
@@ -25,62 +47,77 @@ Do not skip stages, even when the bug seems obvious. Obvious bugs are exactly wh
 ┌─────────────┐      ┌───────────────┐      ┌──────────┐
 │  REPRODUCE  │ ───> │  HYPOTHESIZE  │ ───> │  VERIFY  │
 └─────────────┘      └───────────────┘      └──────────┘
-        ▲                                          │
+        ▲                    ▲                     │
+        │                    └── refuted ──────────┤
         │                                          │
-        └──────── hypothesis wrong? loop back ─────┘
+        └──── symptom mismatch / new conditions ───┘
 ```
 
-When verification disproves the hypothesis, return to Hypothesize (not Reproduce) — the repro still holds, but the theory about why did not.
+When verification refutes the hypothesis, return to Hypothesize — the repro still holds, but the theory did not.
+After two consecutive refutations, follow "When hypotheses run out" below.
 
 ---
 
 ## Stage 1: Reproduce
 
-**Goal:** produce a deterministic, minimal way to trigger the bug. Without this, every later stage is guessing.
+**Goal:** a deterministic, minimal way to trigger the bug — or, when that is impossible, an explicit alternative basis for the investigation.
 
 ### Do these things
 
-1. **Gather the report.** Ask the user — or extract from context — for: the exact command or action taken, the actual result (error text, wrong output, crash), the expected result, the environment (OS, runtime version, commit/branch), and whether the bug is new or old.
-2. **Try to reproduce it yourself** in the available environment before theorizing. Run the failing command. Observe the actual output. Do not trust the user's paraphrase of the error — get the raw text.
-3. **Narrow the repro.** Strip away anything that isn't needed to trigger the bug: unrelated inputs, config flags, surrounding code. A repro that requires 10 steps and 3 services is harder to reason about than one that requires 2 steps and a single process.
-4. **Check for determinism.** Run the repro 3 – 5 times. If it fails sometimes and passes sometimes, that itself is a finding — the bug is timing, concurrency, or environment-dependent, and you should note this before proceeding.
+1. **Collect the report from what is available first** — the user's message, logs, tickets, code, history. Ask the user only for what you cannot find yourself: the exact action, the actual result (raw error text or exit code), the expected result, the environment (OS, runtime, commit/branch, deployed version), and whether the bug is new.
+2. **Try to reproduce it yourself** before theorizing. Run the failing command and observe the raw output. Do not trust a paraphrase of the error.
+3. **Confirm you are looking at what actually failed** — the deployed version, binary, config file, host, and process. The code you read may not be the code that crashed.
+4. **Narrow the repro.** Strip inputs, flags, and code that aren't needed to trigger the bug.
+5. **Check determinism.** Run the repro 3 – 5 times. If it is intermittent, raise the failure rate before moving on (loops, load, widened timing window — see [references/unblocking-techniques.md](references/unblocking-techniques.md)) so later verification has a usable baseline rate.
 
 ### Repro artifact
-
-Before leaving this stage, write down (in the conversation or a scratch file):
 
 ```
 REPRO
 -----
-Environment: <OS, runtime, commit/branch>
+Environment: <OS, runtime, commit/branch, deployed version>
+Repro type:  <local deterministic / local intermittent (N/M) / synthetic (forced by <how>) / none — evidence only (<sources>)>
 Steps:
   1. <exact command or action>
   2. ...
 Expected: <what should happen>
 Actual:   <what does happen, including raw error text or exit code>
-Determinism: <always / intermittent (N/M)>
 ```
 
-If you cannot produce this artifact, **stop and say so**. Possible reasons: missing environment access, insufficient information from the user, or the bug does not actually reproduce. Each of those requires a different response (ask the user, request access, or report that the bug may not exist as described) — but all of them are better than proceeding on guesses.
+### No repro yet? Switch method
+
+Failing to reproduce narrows the method; it does not end the investigation.
+Work through these in order, doing every step your tools and permissions allow:
+
+1. **Re-check the conditions.** Compare your environment with the failing one — version, config, data, load, timing, OS — and reproduce with the differences included.
+2. **Force it synthetically.** When a candidate cause involves a timing window or resource condition, make it happen on purpose: inject a delay inside the suspect window, cap memory or file descriptors, inject faults, run under ASan/TSan/rr. A forced repro that matches the field symptom exactly counts; label it `synthetic`.
+3. **Analyze from evidence.** Logs, core dumps, crash reports, metrics, timelines, and code reading can support a causal chain without a live repro. Set Repro type to `none — evidence only` and continue to Hypothesize.
+4. **Instrument and wait.** Specify the logging, core dump, or trace setting that would capture the next occurrence, with its cost (disk, performance, privacy).
+
+Return to the user only with what remains after these: hypotheses ranked most likely first, each paired with the concrete check that would confirm or refute it, marking which checks you already ran.
 
 ### Common failure modes at this stage
 
 - Accepting a paraphrased error instead of the real one. "It crashes" and "it exits with SIGSEGV in `foo_handler` after the third request" are different bugs.
-- Treating an intermittent bug as a deterministic one. If it only fails 1 in 10 times, a single green run after a "fix" proves nothing.
-- Reproducing a *similar* failure and assuming it's the same bug. Check that the symptoms match exactly (same error, same stack, same output).
+- Treating an intermittent bug as deterministic. If it fails 1 in 10 times, a single green run proves nothing.
+- Reproducing a *similar* failure and assuming it's the same bug. Match the exact error, stack, and output.
+- Declaring "stopping here" because the repro artifact is incomplete, instead of switching method.
 
 ---
 
 ## Stage 2: Hypothesize
 
-**Goal:** form a specific, testable claim about *why* the repro produces the observed result — not just *what* happens, but the causal chain.
+**Goal:** a specific, testable claim about *why* the observed result happens — the causal chain, not just *what* happens.
 
 ### Do these things
 
-1. **Gather evidence.** Read the relevant code. Look at logs, stack traces, recent commits (`git log`, `git blame` on the suspect lines), related tests. Do not propose a hypothesis before reading the code path involved.
-2. **State the hypothesis as a causal chain**, not a vague direction. "There's a bug in the parser" is not a hypothesis; "when the input contains a trailing backslash, `tokenize()` enters the escape branch but never advances the cursor, causing an infinite loop at line 142" is.
-3. **List alternatives briefly.** If only one hypothesis comes to mind, push harder — there is almost always more than one possible explanation. Writing alternatives down makes it harder to fall in love with the first theory.
-4. **Identify the cheapest way to test the hypothesis.** Can you add a log line? Print a variable? Check a precondition with an assertion? Write a failing test? The test should be able to *disprove* the hypothesis, not just confirm it.
+1. **Gather evidence.** Read the code path involved, logs, stack traces, and related tests before proposing anything.
+2. **Ask what changed and when it started** — code (`git log`, `git blame`), deploys, config, dependencies, data, traffic, infrastructure. A start time narrows the suspects faster than code reading.
+3. **Apply a matching bug-type guide** (see "Bug-type guides") — its diagnosis steps belong here.
+4. **State the hypothesis as a causal chain.** "There's a bug in the parser" is not a hypothesis; "when the input ends with a backslash, `tokenize()` enters the escape branch but never advances the cursor, looping forever at line 142" is.
+5. **Push past the proximate cause.** For the last link, ask "why was this state possible?" Repeat until the answer is something you can change in design or structure — ownership, locking, a contract, validation at a boundary — not a guard just before the failing line.
+6. **List alternatives and rank them** by likelihood × cost to test. If only one comes to mind, push harder. Prefer an experiment that discriminates between several hypotheses at once.
+7. **Plan the cheapest test that could disprove the top hypothesis** — a log line, an assertion, a failing test, a forced timing window.
 
 ### Hypothesis artifact
 
@@ -88,33 +125,49 @@ If you cannot produce this artifact, **stop and say so**. Possible reasons: miss
 HYPOTHESIS
 ----------
 Claim: <specific causal statement — what, where, why>
+Why possible: <the structural reason this state can occur at all>
 Evidence so far: <what in the code/logs/history points here>
-Alternatives considered: <other explanations and why they seem less likely>
+Alternatives (ranked): <other explanations, and why each ranks lower>
 Test plan: <the cheapest experiment that would disprove this claim>
 Predicted result if correct: <what you expect to see>
 Predicted result if wrong: <what you'd see instead>
 ```
 
-The "predicted result if wrong" field matters: if the hypothesis predicts the same outcome under both true and false, the test isn't actually discriminating. Refine until the predictions differ.
+If both predictions are the same, the test does not discriminate. Refine until they differ.
 
 ### Common failure modes at this stage
 
-- Jumping from symptom to fix without a causal chain. "The test fails, so let me add a retry" — that changes behavior without explaining why the test failed.
-- Confirmation-seeking tests. If the only outcome you can imagine is "yes, I was right," the test won't teach you anything when you're wrong.
-- Blaming the most recently changed code by default. Recent changes are a reasonable prior, not a conclusion.
+- Jumping from symptom to fix without a causal chain. "The test fails, so add a retry" changes behavior without explaining the failure.
+- Confirmation-seeking tests whose only imaginable outcome is "I was right."
+- Blaming the most recently changed code by default. Recent changes are a prior, not a conclusion.
+- Stopping at the line that crashed instead of asking why that line could be reached in that state.
 
 ---
 
 ## Stage 3: Verify
 
-**Goal:** run the experiment. Update beliefs based on what actually happens.
+**Goal:** run the experiment and update beliefs based on what actually happens.
 
 ### Do these things
 
-1. **Run the test you planned.** Do not change the test mid-run to make it pass. If the predicted-if-correct outcome appears, the hypothesis is supported. If the predicted-if-wrong outcome appears, the hypothesis is refuted. If you see something you did not predict, neither has happened — note this and return to Hypothesize.
-2. **If the hypothesis is supported**, only then propose a fix. The fix should address the specific causal step identified in the hypothesis, not paper over the symptom. Explain why the fix breaks the causal chain.
-3. **Verify the fix against the original repro.** Run the repro artifact from Stage 1. For intermittent bugs, run it enough times to be confident (if it failed 3/10 times before, 10/10 passes after is weak; 100/100 is better).
-4. **Check for regressions.** Run the surrounding test suite. Consider whether the fix could affect adjacent code paths.
+1. **Run the planned test.** Do not change it mid-run. Predicted-if-correct → supported. Predicted-if-wrong → refuted. Something unpredicted → inconclusive; return to Hypothesize with the new evidence.
+2. **Toggle the cause when you can.** Neutralize the suspected cause and the symptom should disappear; restore it and the symptom should return. A toggle is stronger evidence than any single observation. In analysis mode, run code-changing experiments in a scratch copy or with the user's agreement, and revert them.
+3. **Cross-check with tools** when the bug class allows — sanitizers, Valgrind, a debugger on a core dump, rr (see "Cross-checking with tools" in [references/unblocking-techniques.md](references/unblocking-techniques.md)). Tool output counts as evidence only once you state how it supports or refutes the hypothesis.
+4. **Analysis mode ends here.** Report the cause, the confidence level, and a proposed fix direction.
+5. **Fix mode:** propose the fix and how it breaks the causal chain, get approval, apply it, then run the original repro. For intermittent bugs, compare against the baseline rate (failing 3/10 before, 10/10 passes after is weak; 100/100 is better).
+6. **Fix mode: check for regressions.** Run the surrounding test suite and consider adjacent code paths.
+
+### Band-aid fixes
+
+These hide the symptom while the cause stays, and are almost always wrong:
+
+- A NULL or validity check just before the failing access, to skip it
+- Catching the exception, panic, or error that undefined behavior surfaced as
+- A flag variable tracking whether an object is still valid (the flag itself races)
+- A sleep, retry, or reordering that happens to avoid the window
+- Logging added while behavior stays the same
+
+Using one requires stating why a root-cause fix is impossible, and labeling it a symptom-level patch in the report.
 
 ### Verification artifact
 
@@ -125,66 +178,93 @@ Experiment run: <what you did>
 Observed result: <what happened>
 Matches prediction: <yes / no / partial — which branch>
 Hypothesis status: <supported / refuted / inconclusive>
-Confidence level: <1-5, see "Expressing confidence, not certainty" below>
+Confidence level: <1-5, see "Expressing confidence">
 
-[If supported, continue:]
+[Fix mode, if supported:]
 Fix applied: <description, with file:line references>
+Why the path is gone: <why the code path producing the symptom can no longer exist — not "looks safe now">
+New risks checked: <races, deadlocks, or priority inversion the new locking/ownership could add, and how ruled out>
 Repro result after fix: <N/N passes, or test now green>
 Regression check: <what you ran, what passed>
 ```
 
 ### Common failure modes at this stage
 
-- Declaring victory on a green run when the bug was intermittent. One pass is not evidence.
-- Changing the test or the repro while "verifying" so it passes for unrelated reasons.
-- Stopping at "the symptom is gone" without checking that the causal chain was actually broken. A symptom can disappear because of timing changes, not because the bug is fixed.
+- Declaring victory on one green run of an intermittent bug.
+- Changing the test or repro while "verifying" so it passes for unrelated reasons.
+- Stopping at "the symptom is gone." A symptom can disappear from timing changes, not because the causal chain was broken.
 
 ---
 
-## Expressing confidence, not certainty
+## When hypotheses run out
 
-A "supported" hypothesis is a belief updated by evidence, not a proven fact. Never state the root cause with absolute language — avoid "confirmed", "definitely", "clearly", "the cause is X" as a bare assertion. State the conclusion as a probability and attach an explicit confidence level, in the user's language.
+Trigger: two consecutive hypotheses refuted, or no testable hypothesis left.
+Escalate in order, doing every step your tools allow, before reporting that nothing more can be checked:
 
-### Confidence level (1-5)
-
-Rate confidence from the number and certainty of evidence gathered in Verify — not from how the hypothesis "feels":
-
-1. **Very low** — 0-1 pieces of weak/indirect evidence; hypothesis untested or the experiment only partially matched the predicted-if-correct outcome. Express as roughly 20-40% likely.
-2. **Low** — 1-2 circumstantial pieces of evidence; experiment inconclusive; alternative hypotheses not ruled out. Roughly 40-55% likely.
-3. **Moderate** — 2+ pieces of direct evidence; experiment matched the predicted-if-correct outcome, but no regression check yet or some alternatives remain unruled-out. Roughly 55-75% likely.
-4. **High** — Multiple independent pieces of evidence agree (e.g. code path + log/trace + experiment result); predicted-if-wrong outcome did not occur; fix verified against the repro. Roughly 75-90% likely.
-5. **Very high** — All of High, plus regression check passed and (for intermittent bugs) the repro was re-run enough times to be statistically convincing; attempts to disprove the hypothesis failed. Roughly 90%+ likely — never state 100%; residual uncertainty always remains.
-
-State both the level and the qualitative phrase together, e.g. "Level 4 (high confidence, ~80%): X is likely the root cause" — never "X is the root cause" as a flat fact.
+1. **Re-verify premises.** List what you have assumed true and check each — running binary and config match the source you read, the failing host/process is the one you inspected, the log is from the failing run, "unchanged" dependencies really are unchanged. Checklist in [references/unblocking-techniques.md](references/unblocking-techniques.md).
+2. **Name the shared assumption.** Refuted hypotheses often share one frame — same process, thread, host, or layer. Name it and generate hypotheses outside it.
+3. **Widen observation.** Add logging or tracing at the boundaries of the suspect region so the next run shows which side the fault is on.
+4. **Search mechanically.** Bisect commits, inputs, or config; diff a working setup against a failing one. These narrow the cause without needing a theory.
+5. **Send an interim report**: what was ruled out and by which evidence, remaining hypotheses ranked, and the next check for each.
 
 ## When to loop back
 
-- **Repro fails to reproduce the bug the user reported** → return to the user with specifics. Do not invent a repro.
-- **Hypothesis is refuted** → return to Hypothesize. The repro is still valid; the theory wasn't.
-- **Verification is inconclusive** (unpredicted result) → return to Hypothesize with the new evidence.
-- **Fix doesn't resolve the repro** → treat as refuted hypothesis, even if the fix "seems right."
+- **Repro doesn't match the reported symptom** → "No repro yet? Switch method". Do not invent a repro.
+- **Hypothesis refuted** → Hypothesize; on the second consecutive refutation → "When hypotheses run out".
+- **Verification inconclusive** → Hypothesize with the new evidence.
+- **Fix doesn't resolve the repro** → treat as a refuted hypothesis, even if the fix "seems right."
+
+## Expressing confidence
+
+A supported hypothesis is a belief updated by evidence, not a proven fact.
+Never assert the root cause flatly — avoid "confirmed", "definitely", "clearly", or a bare "the cause is X". State a confidence level and rough probability, in the user's language.
+
+Rate from the evidence gathered, not from whether a fix was applied:
+
+1. **Very low** — hypothesis untested; at most one indirect clue.
+2. **Low** — circumstantial evidence only (code reading, pattern match, timing fit); alternatives still open.
+3. **Moderate** — a discriminating experiment or direct artifact (stack trace, core dump, sanitizer report) matches the predicted-if-correct outcome; some alternatives not yet ruled out.
+4. **High** — multiple independent pieces of evidence agree (e.g. code path + trace + experiment); predicted-if-wrong did not occur; main alternatives ruled out. A toggle test, or a fix that removes the symptom in the repro, counts as one such piece.
+5. **Very high** — all of High, plus deliberate attempts to disprove failed and, for intermittent bugs, enough runs to be statistically convincing (and a passing regression check in fix mode).
+
+If no experiment has been run and no direct artifact (stack trace, core dump, sanitizer report, toggle result) exists, the level is 2 at most — however well the circumstantial evidence fits.
+
+Probability bands follow the `analysis-synthesis` skill: L1 20-40%, L2 40-55%, L3 55-75%, L4 75-90%, L5 90%+ (never 100%).
+Write both together, e.g. "Level 4 (high confidence, ~80%): X is likely the root cause."
+At Level 3 or below, name the next check that would raise the level.
 
 ## Output format
 
-At the end of an investigation, summarize using this structure:
-
 ```
-## Root Cause: <one-line summary, phrased as a probability, not a fact — e.g. "Likely caused by X (level 4/5, ~80%)">
+## Root Cause: <one line, phrased as a probability — e.g. "Likely caused by X (level 4/5, ~80%)">
 
 ### Repro
-<the repro artifact>
+<the repro artifact, including Repro type>
 
 ### Root cause
-<the verified hypothesis, stated as a causal chain, prefixed with its confidence level and rough probability — never asserted as bare fact>
+<the hypothesis as a causal chain including "why possible", prefixed with its confidence level>
+
+### Ruled out
+<refuted hypotheses and the evidence that refuted each>
+
+### Open hypotheses and next checks
+<REQUIRED at level 3 or below, or when the investigation is incomplete:
+ ranked most likely first, each with a concrete check; mark checks already run>
 
 ### Fix
-<what was changed and why it breaks the causal chain — include file:line references>
+<fix mode: what changed (file:line) and why it breaks the causal chain
+ analysis mode: proposed fix direction only>
 
 ### Verification
-<how you confirmed the fix works, including regression checks and the final confidence level>
+<experiments run, repro and regression results, final confidence level>
 ```
 
-If the investigation is incomplete (bug didn't reproduce, hypothesis not yet verified, access blocked), be explicit about which stage you got to and what's blocking the next one. Do not present an incomplete investigation as a finished one.
+If the investigation is incomplete, state which stage you reached and what blocks the next one. Do not present an incomplete investigation as finished.
+
+## Handing a bug fix to another agent
+
+Put the instructions from [references/delegating-fixes.md](references/delegating-fixes.md) in the brief.
+When a bug-type guide matches, add that guide's own template too; it is more specific.
 
 ## A note on user pressure
 

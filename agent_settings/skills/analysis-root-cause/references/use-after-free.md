@@ -1,17 +1,12 @@
----
-name: use-after-free-guide
-description: Use-after-free (UAF) 및 dangling pointer 버그의 진단과 수정 가이드라인. AI agent에게 메모리 안전성 버그 수정을 위임할 때 band-aid 수정(NULL 체크 추가, 역참조 직전 방어 코드)을 방지하고 근본 원인(lifetime 관리, 소유권 모델, 동기화 구조)을 수정하도록 강제한다. use-after-free, dangling pointer, double free, 삭제된 객체 역참조, 멀티스레드 메모리 버그, SIGSEGV, SIGABRT, heap-use-after-free (ASan), 또는 "이미 해제된 포인터" 관련 버그가 언급될 때 이 스킬을 사용하라. 사용자가 AI agent에게 내릴 지침을 요청하거나, 직접 UAF 버그를 수정할 때도 트리거한다.
----
-
 # Use-After-Free Debugging Guide
 
 멀티스레드 환경의 use-after-free(UAF) 버그를 근본 원인부터 해결하기 위한 가이드라인.
 
-## 이 스킬이 존재하는 이유
+## 이 가이드가 존재하는 이유
 
 UAF 버그를 AI agent에게 위임하면, agent는 최소 변경 편향(minimal-change bias)에 따라 역참조 직전에 NULL 체크를 추가하는 식으로 수정하려 한다. 이것은 크래시를 숨길 뿐 근본 원인을 해결하지 않으며, 오히려 상태 불일치를 조용히 전파시켜 더 어려운 버그를 만든다.
 
-이 스킬은 **band-aid 수정을 명시적으로 금지**하고, **객체 lifetime 분석 → 소유권/동기화 재설계 → 구조적 검증** 순서를 강제한다.
+이 가이드는 **band-aid 수정을 명시적으로 금지**하고, **객체 lifetime 분석 → 소유권/동기화 재설계 → 구조적 검증** 순서를 강제한다.
 
 ---
 
@@ -232,10 +227,10 @@ UAF 버그 수정을 AI agent에게 위임할 때, 다음 지침을 함께 전�
 
 ---
 
-## bug-hunter 스킬과의 관계
+## Root cause 루프와의 관계
 
-이 스킬은 `bug-hunter`의 Reproduce → Hypothesize → Verify 루프를 대체하지 않는다. UAF 버그에 특화된 **진단 심화 + 수정 방향 제한**을 제공한다.
+이 가이드는 `analysis-root-cause`의 Reproduce → Hypothesize → Verify 루프를 대체하지 않는다. UAF 버그에 특화된 **진단 심화 + 수정 방향 제한**을 제공한다.
 
-- **bug-hunter Stage 2 (Hypothesize)** 에서 이 스킬의 진단 절차(Lifetime Map, Race Condition 식별)를 사용하라.
-- **bug-hunter Stage 3 (Verify)** 에서 이 스킬의 검증 기준(구조적 불가능성, Lifetime 증명)을 사용하라.
+- **Stage 2 (Hypothesize)** 에서 이 가이드의 진단 절차(Lifetime Map, Race Condition 식별)를 사용하라.
+- **Stage 3 (Verify)** 에서 이 가이드의 검증 기준(구조적 불가능성, Lifetime 증명)을 사용하라.
 - 수정 전략 선택은 Hypothesize 단계에서 가설과 함께 결정한다.
