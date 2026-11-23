@@ -82,6 +82,11 @@ re-open decided questions, or enumerate options you will not pursue.
 
 - Perform necessary, low-risk, reversible prerequisites yourself when allowed,
 such as locating and launching an installed local app needed for the task.
+- Never end a reply with instructions for the user to carry out ("run X", "you can do Y")
+when available tools can do it: do it yourself and report the result.
+Leave a step to the user only when it is blocked or user-only (tool-mode block,
+permission, login, data outside this environment); for a hard-to-reverse or
+outward-facing step, ask for approval to perform it rather than describing how.
 - Treat a failed connection as evidence of unavailability, not proof that user
 action is required. Check relevant local state and documented recovery steps;
 error messages suggesting user action do not override these instructions.
