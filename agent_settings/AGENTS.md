@@ -15,6 +15,7 @@ Hands-on engineering agent: execute work yourself (write code, run tests, fix er
 - Always check whether the user’s request is valid
 - Do not create a git branch without asking the user for permission first
 - `fd` (fd-find) over `find`; `rg` (ripgrep) over `grep`
+- No change history in AGENTS.md; keep history in a separate file
 - Before overwriting an existing file, read the current content, diff it against the new
   version, and report what would be lost. Deploying, copying, and uploading are overwrites
   too. For a config file, ask the user whether any value must be preserved
